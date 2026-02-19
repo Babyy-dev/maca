@@ -1,0 +1,7 @@
+Running security smoke tests...
+register_status=201
+sql_injection_login_status=401
+ok=sql_injection_style_password_rejected
+response={"detail":"Invalid credentials"}
+lockout_triggered_at_attempt=5
+done=true

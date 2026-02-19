@@ -1,0 +1,850 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --font-sans: var(--font-body), 'Segoe UI', sans-serif;
+  --font-mono: var(--font-mono-ui), 'Consolas', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply text-foreground;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 15% -5%, rgb(236 72 153 / 0.28), transparent 35%),
+      radial-gradient(circle at 85% 5%, rgb(59 130 246 / 0.3), transparent 38%),
+      radial-gradient(circle at 50% 100%, rgb(217 119 6 / 0.24), transparent 42%),
+      linear-gradient(160deg, #0a1024 0%, #0b1a35 45%, #0f172a 100%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgb(34 211 238 / 0.35);
+    color: rgb(255 255 255);
+  }
+}
+
+@layer utilities {
+  .font-title {
+    font-family: var(--font-title), Impact, sans-serif;
+    letter-spacing: 0.04em;
+  }
+
+  .casino-container {
+    width: min(1120px, 100% - 2.25rem);
+    margin-inline: auto;
+  }
+
+  .hero-gradient-text {
+    background: linear-gradient(
+      110deg,
+      rgb(249 115 22) 0%,
+      rgb(250 204 21) 25%,
+      rgb(34 211 238) 55%,
+      rgb(167 139 250) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 7s linear infinite;
+    background-size: 200% auto;
+  }
+
+  .floating-chip {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border-radius: 9999px;
+    font-family: var(--font-title), sans-serif;
+    background: linear-gradient(145deg, rgb(251 146 60), rgb(220 38 38));
+    box-shadow:
+      0 12px 30px rgb(244 63 94 / 0.28),
+      inset 0 1px 0 rgb(255 255 255 / 0.65);
+    color: rgb(255 255 255);
+    animation: drift 5s ease-in-out infinite;
+  }
+
+  .glass-card {
+    position: relative;
+    border-radius: 1.4rem;
+    border: 1px solid rgb(255 255 255 / 0.15);
+    background:
+      linear-gradient(145deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03)),
+      rgb(15 23 42 / 0.6);
+    backdrop-filter: blur(8px);
+    box-shadow:
+      0 20px 65px rgb(2 6 23 / 0.48),
+      inset 0 1px 0 rgb(255 255 255 / 0.22);
+  }
+
+  .glow-ring::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      120deg,
+      rgb(14 165 233 / 0.4),
+      rgb(251 146 60 / 0.35),
+      rgb(244 63 94 / 0.4)
+    );
+    filter: blur(15px);
+    z-index: -1;
+    opacity: 0.55;
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+
+  .rise-in {
+    animation: rise-in 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .section-anchor {
+    scroll-margin-top: 1.25rem;
+  }
+
+  .casino-ambient {
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .ambient-vignette {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 25% 20%, rgb(14 165 233 / 0.2), transparent 42%),
+      radial-gradient(circle at 82% 28%, rgb(244 63 94 / 0.16), transparent 44%),
+      radial-gradient(circle at 52% 82%, rgb(251 191 36 / 0.12), transparent 48%);
+    opacity: 0.7;
+  }
+
+  .ambient-light {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(44px);
+    opacity: 0.45;
+  }
+
+  .ambient-light-a {
+    left: -3rem;
+    top: 14rem;
+    width: 15rem;
+    height: 15rem;
+    background: rgb(56 189 248 / 0.5);
+  }
+
+  .ambient-light-b {
+    right: -2rem;
+    top: 30rem;
+    width: 13rem;
+    height: 13rem;
+    background: rgb(251 113 133 / 0.52);
+  }
+
+  .ambient-light-c {
+    left: 48%;
+    top: 54rem;
+    width: 18rem;
+    height: 12rem;
+    background: rgb(34 197 94 / 0.33);
+    transform: translateX(-50%);
+  }
+
+  .ambient-shuffle-zone {
+    position: absolute;
+    left: 50%;
+    top: 5.2rem;
+    transform: translateX(-50%);
+    width: min(560px, 84vw);
+    height: 210px;
+    display: grid;
+    place-items: center;
+  }
+
+  .ambient-shuffle-card {
+    position: absolute;
+    width: 88px;
+    height: 126px;
+    border-radius: 0.85rem;
+    border: 1px solid rgb(255 255 255 / 0.55);
+    box-shadow:
+      0 14px 22px rgb(2 6 23 / 0.22),
+      inset 0 1px 0 rgb(255 255 255 / 0.6);
+    background:
+      linear-gradient(168deg, rgb(255 255 255), rgb(226 232 240)),
+      repeating-linear-gradient(
+        -45deg,
+        rgb(255 255 255 / 0.5),
+        rgb(255 255 255 / 0.5) 10px,
+        rgb(241 245 249 / 0.3) 10px,
+        rgb(241 245 249 / 0.3) 20px
+      );
+    transform-style: preserve-3d;
+  }
+
+  .ambient-shuffle-card.is-red {
+    color: rgb(225 29 72);
+  }
+
+  .ambient-shuffle-card:not(.is-red) {
+    color: rgb(15 23 42);
+  }
+
+  .ambient-corner {
+    position: absolute;
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 0.95;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .ambient-corner.tl {
+    left: 8px;
+    top: 8px;
+  }
+
+  .ambient-corner.br {
+    right: 8px;
+    bottom: 8px;
+    transform: rotate(180deg);
+  }
+
+  .ambient-suit {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.9rem;
+    font-weight: 700;
+  }
+
+  .ambient-chip-zone {
+    position: absolute;
+    inset: 0;
+  }
+
+  .ambient-chip {
+    position: absolute;
+    width: 60px;
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    border: 4px dashed rgb(255 255 255 / 0.65);
+    box-shadow:
+      0 10px 18px rgb(2 6 23 / 0.32),
+      inset 0 1px 0 rgb(255 255 255 / 0.7);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-title), sans-serif;
+    font-size: 0.78rem;
+    color: rgb(255 255 255);
+  }
+
+  .ambient-chip span {
+    width: 76%;
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    background: rgb(15 23 42 / 0.35);
+  }
+
+  .ambient-chip-1 {
+    left: 4%;
+    top: 28rem;
+    background: linear-gradient(145deg, rgb(56 189 248), rgb(30 64 175));
+  }
+
+  .ambient-chip-2 {
+    left: 11%;
+    top: 52rem;
+    background: linear-gradient(145deg, rgb(251 146 60), rgb(194 65 12));
+  }
+
+  .ambient-chip-3 {
+    right: 7%;
+    top: 24rem;
+    background: linear-gradient(145deg, rgb(244 63 94), rgb(136 19 55));
+  }
+
+  .ambient-chip-4 {
+    right: 12%;
+    top: 51rem;
+    background: linear-gradient(145deg, rgb(45 212 191), rgb(6 95 70));
+  }
+
+  .ambient-chip-5 {
+    left: 19%;
+    top: 74rem;
+    background: linear-gradient(145deg, rgb(168 85 247), rgb(91 33 182));
+  }
+
+  .ambient-chip-6 {
+    right: 16%;
+    top: 78rem;
+    background: linear-gradient(145deg, rgb(250 204 21), rgb(161 98 7));
+  }
+
+  .ambient-dice-zone {
+    position: absolute;
+    inset: 0;
+  }
+
+  .ambient-die {
+    position: absolute;
+    width: 50px;
+    aspect-ratio: 1 / 1;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 0.56);
+    background:
+      radial-gradient(circle at 25% 25%, rgb(255 255 255 / 0.7), transparent 40%),
+      linear-gradient(165deg, rgb(255 255 255), rgb(203 213 225));
+    box-shadow:
+      0 12px 20px rgb(2 6 23 / 0.26),
+      inset 0 -6px 12px rgb(15 23 42 / 0.15);
+    transform-style: preserve-3d;
+  }
+
+  .ambient-die::before {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border-radius: 9999px;
+    background: rgb(15 23 42 / 0.84);
+    box-shadow:
+      -11px 0 0 rgb(15 23 42 / 0.84),
+      11px 0 0 rgb(15 23 42 / 0.84);
+  }
+
+  .ambient-die-a {
+    left: 8%;
+    top: 40rem;
+  }
+
+  .ambient-die-b {
+    right: 9%;
+    top: 66rem;
+  }
+
+  .table-scene {
+    perspective: 1200px;
+  }
+
+  .premium-table {
+    position: relative;
+    min-height: 440px;
+    border-radius: 2rem;
+    border: 1px solid rgb(255 255 255 / 0.22);
+    background:
+      radial-gradient(circle at 20% 20%, rgb(6 182 212 / 0.2), transparent 50%),
+      radial-gradient(circle at 85% 80%, rgb(244 63 94 / 0.16), transparent 52%),
+      linear-gradient(175deg, rgb(6 78 59 / 0.88), rgb(3 20 37 / 0.94));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      inset 0 -30px 45px rgb(2 6 23 / 0.35),
+      0 30px 80px rgb(2 6 23 / 0.6);
+    overflow: hidden;
+    transform: rotateX(9deg) rotateZ(-1.5deg);
+  }
+
+  .premium-table::after {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border-radius: 1.6rem;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    pointer-events: none;
+  }
+
+  .dealer-arc {
+    position: absolute;
+    left: 50%;
+    top: 56px;
+    height: 130px;
+    width: 72%;
+    transform: translateX(-50%);
+    border: 1px dashed rgb(255 255 255 / 0.22);
+    border-bottom: none;
+    border-radius: 200px 200px 0 0;
+  }
+
+  .table-text {
+    position: absolute;
+    left: 50%;
+    top: 154px;
+    transform: translateX(-50%);
+    font-family: var(--font-title), sans-serif;
+    letter-spacing: 0.14em;
+    font-size: 0.88rem;
+    color: rgb(196 181 253 / 0.8);
+    white-space: nowrap;
+  }
+
+  .table-glow {
+    position: absolute;
+    left: 50%;
+    top: 188px;
+    width: 68%;
+    height: 130px;
+    transform: translateX(-50%);
+    background: radial-gradient(
+      ellipse at center,
+      rgb(45 212 191 / 0.38) 0%,
+      transparent 72%
+    );
+    filter: blur(8px);
+    opacity: 0.55;
+  }
+
+  .cards-row {
+    position: absolute;
+    left: 50%;
+    bottom: 88px;
+    display: flex;
+    gap: 0.9rem;
+    transform: translateX(-50%);
+    align-items: end;
+  }
+
+  .playing-card {
+    position: relative;
+    width: 106px;
+    height: 154px;
+    transform-style: preserve-3d;
+    filter: drop-shadow(0 16px 25px rgb(2 6 23 / 0.35));
+  }
+
+  .card-left {
+    transform: rotate(-10deg);
+  }
+
+  .card-right {
+    transform: rotate(8deg);
+  }
+
+  .card-dealer {
+    transform: translateY(-20px) rotate(-3deg) scale(0.94);
+    opacity: 0.92;
+  }
+
+  .card-face {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.95rem;
+    backface-visibility: hidden;
+    overflow: hidden;
+  }
+
+  .card-front {
+    border: 1px solid rgb(255 255 255 / 0.55);
+    background:
+      linear-gradient(160deg, rgb(255 255 255), rgb(226 232 240)),
+      repeating-linear-gradient(
+        45deg,
+        rgb(255 255 255 / 0.5),
+        rgb(255 255 255 / 0.5) 9px,
+        rgb(248 250 252 / 0.3) 9px,
+        rgb(248 250 252 / 0.3) 18px
+      );
+  }
+
+  .card-back {
+    transform: rotateY(180deg);
+    border: 1px solid rgb(167 243 208 / 0.5);
+    background:
+      linear-gradient(160deg, rgb(14 116 144), rgb(15 23 42)),
+      radial-gradient(circle at 20% 20%, rgb(34 211 238 / 0.35), transparent 40%);
+  }
+
+  .card-back-inner {
+    position: absolute;
+    inset: 8px;
+    border-radius: 0.65rem;
+    border: 1px solid rgb(255 255 255 / 0.25);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-title), sans-serif;
+    color: rgb(236 253 245);
+    letter-spacing: 0.2em;
+    font-size: 1rem;
+    background-image: radial-gradient(
+      circle at center,
+      rgb(255 255 255 / 0.14),
+      transparent 68%
+    );
+  }
+
+  .card-corner {
+    position: absolute;
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 0.95;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .card-corner.top {
+    left: 8px;
+    top: 8px;
+  }
+
+  .card-corner.bottom {
+    right: 8px;
+    bottom: 8px;
+    transform: rotate(180deg);
+  }
+
+  .card-suit-main {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 2.1rem;
+    font-weight: 800;
+  }
+
+  .chip-stack {
+    position: absolute;
+    width: 66px;
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    border: 5px dashed rgb(255 255 255 / 0.65);
+    box-shadow:
+      0 12px 24px rgb(2 6 23 / 0.32),
+      inset 0 1px 0 rgb(255 255 255 / 0.6);
+    display: grid;
+    place-items: center;
+    font-family: var(--font-title), sans-serif;
+    letter-spacing: 0.06em;
+    color: white;
+  }
+
+  .chip-stack span {
+    display: grid;
+    place-items: center;
+    width: 76%;
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    background: rgb(15 23 42 / 0.35);
+    font-size: 0.86rem;
+  }
+
+  .chip-a {
+    left: 48px;
+    bottom: 58px;
+    background: linear-gradient(145deg, rgb(56 189 248), rgb(12 74 110));
+  }
+
+  .chip-b {
+    right: 104px;
+    bottom: 54px;
+    background: linear-gradient(145deg, rgb(244 63 94), rgb(136 19 55));
+  }
+
+  .chip-c {
+    right: 46px;
+    bottom: 86px;
+    background: linear-gradient(145deg, rgb(251 191 36), rgb(146 64 14));
+  }
+
+  .dice-cube {
+    position: absolute;
+    right: 44px;
+    top: 88px;
+    width: 74px;
+    height: 74px;
+    transform-style: preserve-3d;
+    transform: rotateX(-18deg) rotateY(20deg);
+  }
+
+  .dice-face {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.9rem;
+    border: 1px solid rgb(255 255 255 / 0.6);
+    background: linear-gradient(160deg, rgb(255 255 255), rgb(226 232 240));
+    display: grid;
+    place-items: center;
+    box-shadow: inset 0 -8px 16px rgb(15 23 42 / 0.15);
+  }
+
+  .dice-face.front {
+    transform: translateZ(37px);
+  }
+
+  .dice-face.back {
+    transform: rotateY(180deg) translateZ(37px);
+  }
+
+  .dice-face.left {
+    transform: rotateY(-90deg) translateZ(37px);
+  }
+
+  .dice-face.right {
+    transform: rotateY(90deg) translateZ(37px);
+  }
+
+  .dice-face.top {
+    transform: rotateX(90deg) translateZ(37px);
+  }
+
+  .dice-face.bottom {
+    transform: rotateX(-90deg) translateZ(37px);
+  }
+
+  .dice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 0.24rem;
+    width: 78%;
+    height: 78%;
+  }
+
+  .dice-dot {
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .dice-dot.is-visible {
+    background: rgb(15 23 42);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  }
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-14px) scale(1.03);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 0% center;
+  }
+  to {
+    background-position: 200% center;
+  }
+}
+
+@media (max-width: 640px) {
+  .ambient-shuffle-zone {
+    top: 5.4rem;
+    height: 170px;
+  }
+
+  .ambient-shuffle-card {
+    width: 74px;
+    height: 104px;
+  }
+
+  .ambient-chip {
+    width: 50px;
+  }
+
+  .ambient-chip-1,
+  .ambient-chip-2,
+  .ambient-chip-3,
+  .ambient-chip-4,
+  .ambient-chip-5,
+  .ambient-chip-6 {
+    opacity: 0.78;
+  }
+
+  .ambient-die {
+    width: 42px;
+  }
+
+  .premium-table {
+    min-height: 390px;
+  }
+
+  .playing-card {
+    width: 88px;
+    height: 128px;
+  }
+
+  .cards-row {
+    gap: 0.65rem;
+    bottom: 90px;
+  }
+
+  .chip-stack {
+    width: 58px;
+  }
+
+  .dice-cube {
+    width: 62px;
+    height: 62px;
+    right: 34px;
+    top: 92px;
+  }
+
+  .dice-face.front {
+    transform: translateZ(31px);
+  }
+
+  .dice-face.back {
+    transform: rotateY(180deg) translateZ(31px);
+  }
+
+  .dice-face.left {
+    transform: rotateY(-90deg) translateZ(31px);
+  }
+
+  .dice-face.right {
+    transform: rotateY(90deg) translateZ(31px);
+  }
+
+  .dice-face.top {
+    transform: rotateX(90deg) translateZ(31px);
+  }
+
+  .dice-face.bottom {
+    transform: rotateX(-90deg) translateZ(31px);
+  }
+}

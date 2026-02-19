@@ -1,0 +1,10 @@
+Load Test Result
+url=http://127.0.0.1:8000/api/v1/health
+duration_seconds=15
+workers=20
+requests_total=8385
+requests_success=8385
+requests_failed=0
+requests_per_second=559.00
+avg_latency_ms=35.57
+p95_latency_ms=49.51
