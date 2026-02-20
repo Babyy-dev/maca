@@ -13,10 +13,10 @@ export default function HowToPlay() {
           whileInView={{ opacity: 1, y: 0 }}
         >
           <p className="font-title text-xl text-amber-300 md:text-2xl">
-            Product Flows
+            How To Play
           </p>
           <h2 className="mt-2 text-3xl font-bold text-white md:text-5xl">
-            Core Journey From Signup To Cashout
+            MACA Blackjack Table Guide
           </h2>
         </motion.div>
 
@@ -27,13 +27,13 @@ export default function HowToPlay() {
             transition={{ duration: 0.55, delay: 0.05 }}
             whileInView={{ opacity: 1, y: 0 }}
           >
-            <p className="font-title text-5xl text-orange-300">1</p>
+            <p className="font-title text-4xl text-orange-300 sm:text-5xl">1</p>
             <h3 className="mt-3 text-xl font-semibold text-white">
-              Lobby To Match
+              Enter Your Table
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-200">
-              User connects -&gt; Lobby -&gt; Create/Join Table -&gt; Ready -&gt; Game
-              starts. Every action is synced over WebSockets with server checks.
+              Open lobby, join a public room or private code table, set your
+              bet, and lock in ready before the dealer starts the hand.
             </p>
           </motion.li>
 
@@ -43,13 +43,13 @@ export default function HowToPlay() {
             transition={{ duration: 0.55, delay: 0.12 }}
             whileInView={{ opacity: 1, y: 0 }}
           >
-            <p className="font-title text-5xl text-cyan-300">2</p>
+            <p className="font-title text-4xl text-cyan-300 sm:text-5xl">2</p>
             <h3 className="mt-3 text-xl font-semibold text-white">
-              Referral Growth Loop
+              Play The Hand
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-200">
-              User A shares referral code -&gt; User B signs up -&gt; both receive
-              bonus rewards. Referral stats feed profile and leaderboard data.
+              Choose your move: hit, stand, split, double, insurance, or
+              surrender. Every decision is server-validated in realtime.
             </p>
           </motion.li>
 
@@ -59,13 +59,13 @@ export default function HowToPlay() {
             transition={{ duration: 0.55, delay: 0.18 }}
             whileInView={{ opacity: 1, y: 0 }}
           >
-            <p className="font-title text-5xl text-pink-300">3</p>
+            <p className="font-title text-4xl text-pink-300 sm:text-5xl">3</p>
             <h3 className="mt-3 text-xl font-semibold text-white">
-              Crypto To Gameplay
+              Win And Climb
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-200">
-              Deposit crypto -&gt; convert to tokens (1 token = 1 USD) -&gt; play
-              multiplayer blackjack -&gt; withdraw tokens back to crypto.
+              Beat dealer totals, collect payouts, and keep your momentum with
+              streaks, social table energy, and competitive sessions.
             </p>
           </motion.li>
         </ol>

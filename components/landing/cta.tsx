@@ -17,15 +17,14 @@ export default function Cta() {
           <div className="absolute -right-10 top-5 h-24 w-24 rounded-full bg-orange-400/35 blur-2xl" />
 
           <p className="font-title text-xl text-cyan-300 md:text-2xl">
-            Ready To Build Project MACA?
+            Ready To Play MACA?
           </p>
           <h2 className="mt-3 text-3xl font-bold text-white md:text-5xl">
-            Realtime Multiplayer With Python + Redis
+            Join The Live Blackjack Floor
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-slate-200 md:text-base">
-            Frontend experience is ready for your full backend plan: FastAPI
-            APIs, Redis-powered sessions/matchmaking, authoritative game logic,
-            and crypto gateway orchestration.
+            Pick your table style, lock your bet, and play synchronized
+            multiplayer hands in the MACA casino environment.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

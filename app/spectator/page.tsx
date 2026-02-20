@@ -49,6 +49,11 @@ function shortId(value: string | null | undefined): string {
   return value.slice(0, 8)
 }
 
+function cardListText(cards: string[] | undefined): string {
+  if (!cards || cards.length === 0) return "No cards"
+  return cards.join(" ")
+}
+
 function remainingFromDeadline(deadline: string | null | undefined): number {
   if (!deadline) return 0
   const ms = new Date(deadline).getTime() - Date.now()
@@ -221,6 +226,23 @@ export default function SpectatorPage() {
       setTableGameStates((previous) => ({ ...previous, [payload.table_id]: payload }))
     })
 
+    socket.on("table_game_started", (payload: TableGameState) => {
+      if (!payload.table_id) return
+      setTableGameStates((previous) => ({ ...previous, [payload.table_id]: payload }))
+      setMessage(`Round started on ${payload.table_id}`)
+    })
+
+    socket.on("table_round_resolved", (payload: TableGameState) => {
+      if (!payload.table_id) return
+      setTableGameStates((previous) => ({ ...previous, [payload.table_id]: payload }))
+      setMessage(`Round settled on ${payload.table_id}`)
+    })
+
+    socket.on("table_game_ended", (payload: { table_id?: string; reason?: string }) => {
+      if (!payload.table_id) return
+      setMessage(`Table game ended on ${payload.table_id}: ${payload.reason ?? "unknown reason"}`)
+    })
+
     socket.on("table_chat_history", (payload: { table_id?: string; messages?: TableChatMessage[] }) => {
       if (!payload.table_id || !Array.isArray(payload.messages)) return
       setChatByTable((previous) => ({ ...previous, [payload.table_id!]: payload.messages! }))
@@ -343,7 +365,7 @@ export default function SpectatorPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-cyan-300">Spectator View</h1>
+            <h1 className="font-title text-3xl text-cyan-300 sm:text-5xl">Spectator View</h1>
             <p className="text-sm text-slate-200">
               Read-only live table monitoring with realtime turns, chat stream, and reactions.
             </p>
@@ -472,15 +494,29 @@ export default function SpectatorPage() {
                     <span className="text-amber-300">{spectatorTableId === activeTable.id ? "Spectator" : "Viewer"}</span>
                   </p>
 
-                  {activeGameState && activeGameState.status === "active" ? (
-                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3">
+                  {activeGameState ? (
+                    <div className="space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3">
+                      <p className="text-sm text-emerald-200">
+                        Round status: {activeGameState.status} | Phase: {activeGameState.phase ?? "unknown"}
+                      </p>
                       <p className="text-sm text-emerald-200">
                         Current turn: {shortId(activeGameState.current_turn_user_id)}
                       </p>
-                      <p className="text-sm text-emerald-200">Time left: {activeTurnRemaining}s</p>
+                      {activeGameState.status === "active" ? (
+                        <p className="text-sm text-emerald-200">Time left: {activeTurnRemaining}s</p>
+                      ) : null}
+                      <p className="break-words text-sm text-emerald-200">
+                        Dealer: {cardListText(activeGameState.dealer_cards)} | Score:{" "}
+                        {activeGameState.dealer_score ?? "?"}
+                      </p>
                       <p className="text-sm text-emerald-200">
                         Last action: {activeGameState.last_action?.action ?? "none"}
                       </p>
+                      {activeGameState.recommended_action ? (
+                        <p className="text-sm text-cyan-200">
+                          Strategy hint: {activeGameState.recommended_action.replace("_", " ").toUpperCase()}
+                        </p>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="text-sm text-slate-300">No active hand right now.</p>
@@ -488,9 +524,49 @@ export default function SpectatorPage() {
 
                   <div className="rounded-xl border border-white/15 bg-black/20 p-3">
                     <p className="text-xs text-slate-300">Participants</p>
-                    <p className="mt-1 text-sm text-slate-100">
-                      {activeTable.players.map((playerId) => shortId(playerId)).join(" | ") || "None"}
-                    </p>
+                    {activeGameState?.player_states ? (
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {activeTable.players.map((playerId) => {
+                          const playerState = activeGameState.player_states?.[playerId]
+                          if (!playerState) {
+                            return (
+                              <div
+                                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300"
+                                key={playerId}
+                              >
+                                {shortId(playerId)}: waiting
+                              </div>
+                            )
+                          }
+                          return (
+                            <div
+                              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                              key={playerId}
+                            >
+                              <p className="text-xs text-slate-100">
+                                {shortId(playerId)} | payout {playerState.total_payout}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Insurance: {playerState.insurance_bet} | Insurance payout:{" "}
+                                {playerState.insurance_payout}
+                              </p>
+                              <div className="mt-1 space-y-1">
+                                {playerState.hands.map((hand, index) => (
+                                  <p className="break-words text-xs text-slate-300" key={hand.hand_id}>
+                                    H{index + 1}: {cardListText(hand.cards)} | {hand.score} | Bet {hand.bet} |{" "}
+                                    {hand.result ?? hand.status}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-slate-100">
+                        {activeTable.players.map((playerId) => shortId(playerId)).join(" | ") || "None"}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -534,7 +610,7 @@ export default function SpectatorPage() {
                         .slice()
                         .reverse()
                         .map((reaction) => (
-                          <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2" key={reaction.id}>
+                          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2" key={reaction.id}>
                             <p className="text-sm text-slate-100">
                               {reaction.emoji} {reaction.username}
                             </p>

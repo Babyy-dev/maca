@@ -94,7 +94,7 @@ export default function ReferralsPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-cyan-300">Referral Dashboard</h1>
+            <h1 className="font-title text-3xl text-cyan-300 sm:text-5xl">Referral Dashboard</h1>
             <p className="text-sm text-slate-200">
               Milestone 7: share referral code, track rewards, and monitor invited users.
             </p>

@@ -84,7 +84,9 @@ type TableModerationNotice = {
   details?: Record<string, unknown>
 }
 
-function createActionId(action: "hit" | "stand"): string {
+function createActionId(
+  action: "hit" | "stand" | "double_down" | "split" | "surrender" | "insurance",
+): string {
   const cryptoApi = globalThis.crypto
   if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
     return `${action}-${cryptoApi.randomUUID()}`
@@ -95,6 +97,11 @@ function createActionId(action: "hit" | "stand"): string {
 function shortUser(userId: string | null | undefined): string {
   if (!userId) return "N/A"
   return userId.slice(0, 8)
+}
+
+function cardListText(cards: string[] | undefined): string {
+  if (!cards || cards.length === 0) return "No cards"
+  return cards.join(" ")
 }
 
 function remainingFromDeadline(deadline: string | null): number {
@@ -115,6 +122,7 @@ export default function LobbyPage() {
   const [maxPlayers, setMaxPlayers] = useState(8)
   const [isPrivate, setIsPrivate] = useState(false)
   const [inviteCode, setInviteCode] = useState("")
+  const [readyBet, setReadyBet] = useState("10")
   const [activeTableId, setActiveTableId] = useState<string | null>(null)
   const [spectatorTableId, setSpectatorTableId] = useState<string | null>(null)
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
@@ -170,6 +178,11 @@ export default function LobbyPage() {
       activeGameState.current_turn_user_id === user.id
     )
   }, [activeGameState, user])
+
+  const myAvailableActions = useMemo(() => {
+    if (!isMyTurn || !activeGameState) return []
+    return activeGameState.available_actions ?? []
+  }, [isMyTurn, activeGameState])
 
   const activeTurnRemaining = useMemo(() => {
     void clockTick
@@ -480,13 +493,18 @@ export default function LobbyPage() {
 
     socket.on("table_game_started", (payload: TableGameState) => {
       replaceGameState(payload)
-      setMessage(`Turn cycle started for table ${payload.table_id}.`)
+      setMessage(`Blackjack round started for table ${payload.table_id}.`)
     })
 
     socket.on("table_game_ended", (payload: { table_id?: string; reason?: string }) => {
       if (!payload.table_id) return
       removeGameState(payload.table_id)
       setMessage(`Table game ended: ${payload.reason ?? "unknown reason"}`)
+    })
+
+    socket.on("table_round_resolved", (payload: TableGameState) => {
+      replaceGameState(payload)
+      setMessage(`Round settled on table ${payload.table_id}.`)
     })
 
     socket.on("table_chat_history", (payload: { table_id?: string; messages?: TableChatMessage[] }) => {
@@ -552,7 +570,7 @@ export default function LobbyPage() {
     socket.on("turn_timeout", (payload: { table_id?: string; user_id?: string }) => {
       if (!payload.table_id) return
       setMessage(
-        `Turn timeout on table ${payload.table_id} (user ${shortUser(payload.user_id)} auto-passed).`,
+        `Turn timeout on table ${payload.table_id} (user ${shortUser(payload.user_id)} auto-stood).`,
       )
     })
 
@@ -836,15 +854,19 @@ export default function LobbyPage() {
     if (!isRealtimeConnected || !isCurrentUserParticipant) return
     setMessage(null)
     try {
-      await emitRealtime("set_ready", { ready: nextReady })
-      setMessage(nextReady ? "You are marked ready." : "You are marked not ready.")
+      const parsedBet = Number.parseFloat(readyBet)
+      const bet = Number.isFinite(parsedBet) ? parsedBet : 10
+      await emitRealtime("set_ready", nextReady ? { ready: true, bet } : { ready: false })
+      setMessage(nextReady ? `You are ready with ${bet.toFixed(2)} chips.` : "You are marked not ready.")
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "Unable to change ready state"
       setMessage(text)
     }
   }
 
-  async function onTurnAction(action: "hit" | "stand") {
+  async function onTurnAction(
+    action: "hit" | "stand" | "double_down" | "split" | "surrender" | "insurance",
+  ) {
     if (!isRealtimeConnected) return
     setMessage(null)
     try {
@@ -855,7 +877,7 @@ export default function LobbyPage() {
       if (response.state) {
         replaceGameState(response.state)
       }
-      setMessage(`Submitted ${action.toUpperCase()} action.`)
+      setMessage(`Submitted ${action.replace("_", " ").toUpperCase()} action.`)
     } catch (caught) {
       const text = caught instanceof Error ? caught.message : "Unable to submit turn action"
       setMessage(text)
@@ -1038,7 +1060,7 @@ export default function LobbyPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-cyan-300">Lobby</h1>
+            <h1 className="font-title text-3xl text-cyan-300 sm:text-5xl">Lobby</h1>
             <p className="text-sm text-slate-200">
               Milestone 5 flow: role-based admin commands, audits, moderation, and economy controls.
             </p>
@@ -1180,7 +1202,7 @@ export default function LobbyPage() {
               </form>
 
               <div className="mt-6 space-y-4 rounded-xl border border-white/15 bg-white/5 p-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-lg font-semibold text-white">Friends</h3>
                   <button
                     className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs text-white"
@@ -1211,7 +1233,7 @@ export default function LobbyPage() {
                   {socialOverview?.friends.length ? (
                     socialOverview.friends.map((friend) => (
                       <div
-                        className="flex items-center justify-between rounded-lg border border-white/15 bg-black/20 px-3 py-2"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/15 bg-black/20 px-3 py-2"
                         key={friend.id}
                       >
                         <span className="text-xs text-slate-100">{friend.username}</span>
@@ -1250,7 +1272,7 @@ export default function LobbyPage() {
 
             <section className="space-y-4">
               <div className="glass-card rounded-2xl p-5">
-                <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-title text-3xl text-white">Open Tables</h2>
                   <button
                     className="rounded-lg border border-white/20 bg-white/5 px-3 py-1 text-sm text-white"
@@ -1296,7 +1318,7 @@ export default function LobbyPage() {
                               <p className="text-xs text-rose-300">Locked by admin</p>
                             ) : null}
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <button
                               className="rounded-md bg-gradient-to-r from-orange-300 to-rose-500 px-3 py-1 text-sm font-semibold text-slate-900"
                               onClick={() => {
@@ -1373,7 +1395,7 @@ export default function LobbyPage() {
                               className="rounded-lg border border-white/15 bg-white/5 px-3 py-2"
                               key={playerId}
                             >
-                              <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
                                 <p className="text-xs text-slate-100">
                                   {shortUser(playerId)}
                                   {playerId === activeTable.owner_id ? " (owner)" : ""}
@@ -1419,23 +1441,87 @@ export default function LobbyPage() {
                       </div>
                     </div>
 
-                    {activeGameState && activeGameState.status === "active" ? (
-                      <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3">
+                    {activeGameState ? (
+                      <div className="space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3">
+                        <p className="text-sm text-emerald-200">
+                          Round status: {activeGameState.status} | Phase: {activeGameState.phase ?? "unknown"}
+                        </p>
                         <p className="text-sm text-emerald-200">
                           Current turn: {shortUser(activeGameState.current_turn_user_id)}
                         </p>
-                        <p className="text-sm text-emerald-200">Time left: {activeTurnRemaining}s</p>
-                        <p className="text-sm text-emerald-200">
+                        {activeGameState.status === "active" ? (
+                          <p className="text-sm text-emerald-200">Time left: {activeTurnRemaining}s</p>
+                        ) : null}
+                        <p className="break-words text-sm text-emerald-200">
+                          Dealer: {cardListText(activeGameState.dealer_cards)} | Score:{" "}
+                          {activeGameState.dealer_score ?? "?"}
+                        </p>
+                        <p className="break-words text-sm text-emerald-200">
                           Last action: {activeGameState.last_action?.action ?? "none"}
                         </p>
+                        {activeGameState.recommended_action ? (
+                          <p className="text-sm text-cyan-200">
+                            Strategy hint: {activeGameState.recommended_action.replace("_", " ").toUpperCase()}
+                          </p>
+                        ) : null}
+
+                        <div className="grid gap-2 md:grid-cols-2">
+                          {activeTable.players.map((playerId) => {
+                            const playerState = activeGameState.player_states?.[playerId]
+                            if (!playerState) {
+                              return (
+                                <div
+                                  className="rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs text-slate-300"
+                                  key={playerId}
+                                >
+                                  {shortUser(playerId)}: waiting
+                                </div>
+                              )
+                            }
+                            return (
+                              <div
+                                className="rounded-lg border border-white/15 bg-black/20 px-3 py-2"
+                                key={playerId}
+                              >
+                                <p className="text-xs text-slate-100">
+                                  {shortUser(playerId)}
+                                  {playerId === user?.id ? " (you)" : ""}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  Insurance: {playerState.insurance_bet} | Insurance payout:{" "}
+                                  {playerState.insurance_payout}
+                                </p>
+                                <div className="mt-1 space-y-1">
+                                  {playerState.hands.map((hand, index) => (
+                                    <p className="break-words text-xs text-slate-300" key={hand.hand_id}>
+                                      H{index + 1}: {cardListText(hand.cards)} | {hand.score} | Bet {hand.bet} |{" "}
+                                      {hand.result ?? hand.status}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     ) : (
                       <p className="text-sm text-slate-300">
-                        No active turn cycle yet. Mark all players ready to start.
+                        No active round yet. Mark all players ready to start.
                       </p>
                     )}
 
                     <div className="flex flex-wrap gap-2">
+                      <input
+                        className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white sm:w-32"
+                        disabled={Boolean(activeGameState && activeGameState.status === "active")}
+                        inputMode="decimal"
+                        min="1"
+                        onChange={(event) => setReadyBet(event.target.value)}
+                        placeholder="Bet"
+                        step="0.5"
+                        type="number"
+                        value={readyBet}
+                      />
                       <button
                         className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900"
                         disabled={
@@ -1461,7 +1547,7 @@ export default function LobbyPage() {
                       </button>
                       <button
                         className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-                        disabled={!isMyTurn || isViewingAsSpectator}
+                        disabled={!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("hit")}
                         onClick={() => {
                           onTurnAction("hit").catch(() => setMessage("Turn action failed"))
                         }}
@@ -1471,13 +1557,55 @@ export default function LobbyPage() {
                       </button>
                       <button
                         className="rounded-lg bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-                        disabled={!isMyTurn || isViewingAsSpectator}
+                        disabled={!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("stand")}
                         onClick={() => {
                           onTurnAction("stand").catch(() => setMessage("Turn action failed"))
                         }}
                         type="button"
                       >
                         Stand
+                      </button>
+                      <button
+                        className="rounded-lg bg-fuchsia-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+                        disabled={
+                          !isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("double_down")
+                        }
+                        onClick={() => {
+                          onTurnAction("double_down").catch(() => setMessage("Turn action failed"))
+                        }}
+                        type="button"
+                      >
+                        Double
+                      </button>
+                      <button
+                        className="rounded-lg bg-sky-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+                        disabled={!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("split")}
+                        onClick={() => {
+                          onTurnAction("split").catch(() => setMessage("Turn action failed"))
+                        }}
+                        type="button"
+                      >
+                        Split
+                      </button>
+                      <button
+                        className="rounded-lg bg-violet-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+                        disabled={!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("insurance")}
+                        onClick={() => {
+                          onTurnAction("insurance").catch(() => setMessage("Turn action failed"))
+                        }}
+                        type="button"
+                      >
+                        Insurance
+                      </button>
+                      <button
+                        className="rounded-lg bg-rose-300 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
+                        disabled={!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes("surrender")}
+                        onClick={() => {
+                          onTurnAction("surrender").catch(() => setMessage("Turn action failed"))
+                        }}
+                        type="button"
+                      >
+                        Surrender
                       </button>
                       {isViewingAsSpectator ? (
                         <button
@@ -1561,7 +1689,7 @@ export default function LobbyPage() {
                       )}
                     </div>
                     <form
-                      className="flex gap-2"
+                      className="flex flex-col gap-2 sm:flex-row"
                       onSubmit={(event) => {
                         event.preventDefault()
                         onSendChat().catch(() => setMessage("Chat failed"))
@@ -1608,7 +1736,7 @@ export default function LobbyPage() {
                           key={request.id}
                         >
                           <p className="text-xs text-slate-200">{request.sender_username}</p>
-                          <div className="mt-2 flex gap-2">
+                          <div className="mt-2 flex flex-wrap gap-2">
                             <button
                               className="rounded-md bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-900"
                               onClick={() => {
@@ -1719,7 +1847,7 @@ export default function LobbyPage() {
                     Commands: /kick /mute /unmute /ban /unban /spectate /lock_table /unlock_table
                     /end_round /close_table /add_balance /remove_balance /set_balance /set_role
                   </p>
-                  <form className="mt-3 flex gap-2" onSubmit={onRunAdminCommand}>
+                  <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={onRunAdminCommand}>
                     <input
                       className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white"
                       onChange={(event) => setAdminCommand(event.target.value)}
@@ -1738,7 +1866,7 @@ export default function LobbyPage() {
                   ) : null}
 
                   <div className="mt-4 rounded-xl border border-white/15 bg-black/20 p-3">
-                    <div className="mb-2 flex items-center justify-between">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-white">Recent Audits</p>
                       <button
                         className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-xs text-white"

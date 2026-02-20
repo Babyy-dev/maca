@@ -22,7 +22,6 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Blackjack Blitz',
   description: 'Colorful animated blackjack landing page',
-  generator: 'v0.app',
   icons: {
     icon: [
       {

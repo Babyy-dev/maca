@@ -257,7 +257,7 @@ export default function WalletPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-emerald-300">Wallet Gateway</h1>
+            <h1 className="font-title text-3xl text-emerald-300 sm:text-5xl">Wallet Gateway</h1>
             <p className="text-sm text-slate-200">
               Milestone 8: wallet linking, BTC/ETH/SOL deposits, 1:1 USD tokens, and withdrawal approvals.
             </p>
@@ -571,7 +571,7 @@ export default function WalletPage() {
                       placeholder="Reason/notes (optional)"
                       value={decisionReasonById[entry.id] ?? ""}
                     />
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-900 disabled:opacity-60"
                         disabled={isWorking}

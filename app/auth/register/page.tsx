@@ -50,7 +50,7 @@ export default function RegisterPage() {
   return (
     <main className="min-h-screen px-4 py-16">
       <div className="mx-auto max-w-md rounded-2xl border border-white/15 bg-slate-900/55 p-6 backdrop-blur">
-        <h1 className="font-title text-5xl text-cyan-300">Create Account</h1>
+        <h1 className="font-title text-3xl text-cyan-300 sm:text-5xl">Create Account</h1>
         <p className="mt-2 text-sm text-slate-200">
           Milestone 1 foundation: register and initialize secure session.
         </p>

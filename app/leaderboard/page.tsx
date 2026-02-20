@@ -208,7 +208,7 @@ export default function LeaderboardPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-amber-300">Leaderboards</h1>
+            <h1 className="font-title text-3xl text-amber-300 sm:text-5xl">Leaderboards</h1>
             <p className="text-sm text-slate-200">
               Realtime leaderboard view with global/friends scope and automatic refresh.
             </p>

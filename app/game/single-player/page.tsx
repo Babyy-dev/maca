@@ -53,7 +53,7 @@ function PlayingCard({ card }: { card: string }) {
   const parsed = cardToView(card)
   return (
     <div
-      className={`w-20 rounded-lg border px-2 py-2 shadow ${
+      className={`w-16 rounded-lg border px-2 py-2 shadow sm:w-20 ${
         card === "??"
           ? "border-white/30 bg-slate-800/80 text-slate-200"
           : "border-slate-300 bg-white"
@@ -194,12 +194,12 @@ export default function SinglePlayerGamePage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-emerald-300">Single-Player Blackjack</h1>
+            <h1 className="font-title text-3xl text-emerald-300 sm:text-5xl">Single-Player Blackjack</h1>
             <p className="text-sm text-slate-200">
               Milestone 2: secure round engine, dealer logic, result settlement, and logging.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
               href="/lobby"
@@ -266,7 +266,7 @@ export default function SinglePlayerGamePage() {
 
               <div className="mt-6 space-y-5">
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-semibold text-white">Dealer</h2>
                     <p className="text-sm text-slate-300">
                       Score: {round?.dealer_score ?? "Hidden"}
@@ -284,7 +284,7 @@ export default function SinglePlayerGamePage() {
                 </div>
 
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-semibold text-white">Player</h2>
                     <p className="text-sm text-slate-300">Score: {round?.player_score ?? "-"}</p>
                   </div>

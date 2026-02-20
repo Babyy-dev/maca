@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
+import json
 import re
 import shlex
 from urllib.parse import parse_qs
@@ -11,7 +12,7 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.security import decode_access_token_payload
-from app.db.models import User
+from app.db.models import RoundLog, User
 from app.db.session import SessionLocal
 from app.schemas.lobby import TableCreateRequest
 from app.services.admin_service import (
@@ -22,6 +23,7 @@ from app.services.admin_service import (
     write_audit_log,
 )
 from app.services.auth_service import get_active_user_session_by_id, get_user_by_email
+from app.services.blackjack_service import build_deck, card_value, hand_score, natural_blackjack
 from app.services.lobby_service import LobbyTable, lobby_service
 from app.services.profanity_service import MAX_CHAT_MESSAGE_LENGTH, sanitize_chat_message
 from app.services.rate_limit_service import rate_limit_service
@@ -42,6 +44,10 @@ MUTE_MAX_SECONDS = 60 * 60 * 6
 MAX_ADMIN_COMMAND_LENGTH = 500
 MAX_ACTION_ID_LENGTH = 64
 ACTION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+DEFAULT_TABLE_BET = 10.0
+MIN_TABLE_BET = 1.0
+MAX_TABLE_BET = 1000.0
+MAX_TABLE_PLAYER_HANDS = 2
 
 
 @dataclass
@@ -52,14 +58,47 @@ class ConnectionIdentity:
 
 
 @dataclass
+class TableHandState:
+    hand_id: str
+    cards: list[str]
+    bet: float
+    status: str = "active"
+    result: str | None = None
+    payout: float | None = None
+    is_split_hand: bool = False
+    doubled_down: bool = False
+
+
+@dataclass
+class TablePlayerState:
+    user_id: str
+    hands: list[TableHandState]
+    active_hand_index: int = 0
+    completed: bool = False
+    base_bet: float = 0.0
+    bankroll_at_start: float = 0.0
+    committed_bet: float = 0.0
+    total_payout: float = 0.0
+    insurance_bet: float = 0.0
+    insurance_decided: bool = False
+    insurance_payout: float = 0.0
+
+
+@dataclass
 class TableTurnState:
     table_id: str
     players: list[str]
     turn_index: int
     turn_seconds: int
     turn_deadline: datetime
+    round_id: str = field(default_factory=lambda: uuid4().hex)
     status: str = "active"
     hand_number: int = 1
+    phase: str = "player_turns"
+    dealer_cards: list[str] = field(default_factory=list)
+    dealer_hidden: bool = True
+    shoe: list[str] = field(default_factory=list)
+    player_states: dict[str, TablePlayerState] = field(default_factory=dict)
     last_action: dict | None = None
     action_log: list[dict] = field(default_factory=list)
     processed_action_ids: dict[str, datetime] = field(default_factory=dict)
@@ -81,6 +120,8 @@ class ChatMessage:
 _sid_to_identity: dict[str, ConnectionIdentity] = {}
 _user_to_sids: dict[str, set[str]] = {}
 _table_ready: dict[str, set[str]] = {}
+_table_pending_bets: dict[str, dict[str, float]] = {}
+_table_forced_shoes: dict[str, list[str]] = {}
 _table_turn_states: dict[str, TableTurnState] = {}
 _reconnect_deadlines: dict[str, datetime] = {}
 _sid_spectator_table: dict[str, str] = {}
@@ -321,11 +362,274 @@ def _load_identity_from_token(token: str | None) -> tuple[ConnectionIdentity | N
         db.close()
 
 
+def _normalize_table_bet(raw_value: object) -> float:
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        value = DEFAULT_TABLE_BET
+    value = round(value, 2)
+    return max(MIN_TABLE_BET, min(MAX_TABLE_BET, value))
+
+
+def _card_rank(card: str) -> str:
+    return card[:-1]
+
+
+def _draw_table_card(state: TableTurnState) -> str:
+    if len(state.shoe) == 0:
+        state.shoe = build_deck()
+    return state.shoe.pop()
+
+
+def _set_forced_shoe_draw_order(table_id: str, draw_order: list[str]) -> None:
+    # Test helper: cards are consumed via pop(), so reverse the desired draw order.
+    normalized_table_id = table_id.strip()
+    if not normalized_table_id:
+        raise ValueError("table_id is required")
+    if len(draw_order) == 0:
+        raise ValueError("draw_order must not be empty")
+    normalized_cards = [str(card).strip().upper() for card in draw_order if str(card).strip()]
+    if len(normalized_cards) != len(draw_order):
+        raise ValueError("draw_order contains invalid cards")
+    _table_forced_shoes[normalized_table_id] = list(reversed(normalized_cards))
+
+
+def _clear_forced_shoe(table_id: str | None = None) -> None:
+    if table_id is None:
+        _table_forced_shoes.clear()
+        return
+    _table_forced_shoes.pop(table_id.strip(), None)
+
+
 def _current_turn_user_id(state: TableTurnState) -> str | None:
-    if state.status != "active" or len(state.players) == 0:
+    if state.status != "active" or state.phase != "player_turns" or len(state.players) == 0:
         return None
     index = state.turn_index % len(state.players)
     return state.players[index]
+
+
+def _current_turn_player_state(state: TableTurnState) -> TablePlayerState | None:
+    user_id = _current_turn_user_id(state)
+    if not user_id:
+        return None
+    return state.player_states.get(user_id)
+
+
+def _current_turn_hand(state: TableTurnState) -> TableHandState | None:
+    player_state = _current_turn_player_state(state)
+    if not player_state:
+        return None
+    if player_state.active_hand_index < 0 or player_state.active_hand_index >= len(player_state.hands):
+        return None
+    return player_state.hands[player_state.active_hand_index]
+
+
+def _hand_is_playable(hand: TableHandState) -> bool:
+    return hand.status == "active" and hand.result is None and hand_score(hand.cards) < 21
+
+
+def _can_split_hand(player_state: TablePlayerState, hand: TableHandState) -> bool:
+    if len(player_state.hands) >= MAX_TABLE_PLAYER_HANDS:
+        return False
+    if hand.status != "active" or hand.result is not None or len(hand.cards) != 2:
+        return False
+    if _card_rank(hand.cards[0]) != _card_rank(hand.cards[1]):
+        return False
+    projected_bet = round(player_state.committed_bet + hand.bet, 2)
+    return projected_bet <= round(player_state.bankroll_at_start + 1e-9, 2)
+
+
+def _can_double_down(player_state: TablePlayerState, hand: TableHandState) -> bool:
+    if hand.status != "active" or hand.result is not None or len(hand.cards) != 2:
+        return False
+    if hand.doubled_down:
+        return False
+    projected_bet = round(player_state.committed_bet + hand.bet, 2)
+    return projected_bet <= round(player_state.bankroll_at_start + 1e-9, 2)
+
+
+def _insurance_bet_amount(player_state: TablePlayerState) -> float:
+    return round(max(0.0, player_state.base_bet / 2), 2)
+
+
+def _can_take_insurance(state: TableTurnState, player_state: TablePlayerState, hand: TableHandState) -> bool:
+    if len(state.dealer_cards) == 0 or _card_rank(state.dealer_cards[0]) != "A":
+        return False
+    if not state.dealer_hidden:
+        return False
+    if player_state.insurance_decided:
+        return False
+    if hand.status != "active" or hand.result is not None:
+        return False
+    if player_state.active_hand_index != 0 or len(hand.cards) != 2:
+        return False
+    insurance_bet = _insurance_bet_amount(player_state)
+    if insurance_bet <= 0:
+        return False
+    projected_bet = round(player_state.committed_bet + insurance_bet, 2)
+    return projected_bet <= round(player_state.bankroll_at_start + 1e-9, 2)
+
+
+def _can_surrender(hand: TableHandState) -> bool:
+    if hand.status != "active" or hand.result is not None:
+        return False
+    if hand.is_split_hand or hand.doubled_down:
+        return False
+    if len(hand.cards) != 2:
+        return False
+    return hand_score(hand.cards) < 21
+
+
+def _available_actions_for_current_turn(state: TableTurnState) -> list[str]:
+    if state.status != "active" or state.phase != "player_turns":
+        return []
+    player_state = _current_turn_player_state(state)
+    hand = _current_turn_hand(state)
+    if not player_state or not hand or not _hand_is_playable(hand):
+        return []
+    actions = ["hit", "stand"]
+    if _can_double_down(player_state, hand):
+        actions.append("double_down")
+    if _can_split_hand(player_state, hand):
+        actions.append("split")
+    if _can_surrender(hand):
+        actions.append("surrender")
+    if _can_take_insurance(state, player_state, hand):
+        actions.append("insurance")
+    return actions
+
+
+def _is_soft_hand(cards: list[str]) -> bool:
+    if not any(_card_rank(card) == "A" for card in cards):
+        return False
+    low_total = sum(1 if _card_rank(card) == "A" else card_value(card) for card in cards)
+    return hand_score(cards) > low_total
+
+
+def _should_split(player_cards: list[str], dealer_upcard: str) -> bool:
+    rank = _card_rank(player_cards[0])
+    if rank in {"A", "8"}:
+        return True
+    if rank == "5":
+        return False
+    split_map = {
+        "2": {"2", "3", "4", "5", "6", "7"},
+        "3": {"2", "3", "4", "5", "6", "7"},
+        "4": {"5", "6"},
+        "6": {"2", "3", "4", "5", "6"},
+        "7": {"2", "3", "4", "5", "6", "7"},
+        "9": {"2", "3", "4", "5", "6", "8", "9"},
+    }
+    valid_dealer_ranks = split_map.get(rank)
+    if not valid_dealer_ranks:
+        return False
+    return _card_rank(dealer_upcard) in valid_dealer_ranks
+
+
+def _recommended_basic_strategy_action(state: TableTurnState) -> str | None:
+    available_actions = _available_actions_for_current_turn(state)
+    if len(available_actions) == 0:
+        return None
+
+    hand = _current_turn_hand(state)
+    if not hand or len(hand.cards) == 0 or len(state.dealer_cards) == 0:
+        return None
+
+    player_cards = list(hand.cards)
+    dealer_upcard = state.dealer_cards[0]
+    player_score = hand_score(player_cards)
+    dealer_up_value = card_value(dealer_upcard)
+
+    move = "stand" if player_score >= 19 else None
+
+    can_split = (
+        len(player_cards) == 2
+        and _card_rank(player_cards[0]) == _card_rank(player_cards[1])
+        and "split" in available_actions
+    )
+    if move is None and can_split and _should_split(player_cards, dealer_upcard):
+        move = "split"
+
+    if move is None and _is_soft_hand(player_cards):
+        soft_table = {
+            13: "  hhhddhhhhh",
+            14: "  hhhddhhhhh",
+            15: "  hhdddhhhhh",
+            16: "  hhdddhhhhh",
+            17: "  hddddhhhhh",
+            18: "  sddddsshhh",
+        }
+        if player_score in soft_table and 0 <= dealer_up_value < len(soft_table[player_score]):
+            code = soft_table[player_score][dealer_up_value]
+            move = {"h": "hit", "s": "stand", "d": "double_down"}.get(code, "hit")
+        elif player_score >= 19:
+            move = "stand"
+        else:
+            move = "hit"
+    elif move is None:
+        hard_table = {
+            9: "  hdddhhhhhh",
+            10: "  ddddddddhh",
+            11: "  dddddddddh",
+            12: "  hhssshhhhh",
+            13: "  ssssshhhhh",
+            14: "  ssssshhhhh",
+            15: "  ssssshhhhh",
+            16: "  ssssshhhhh",
+        }
+        if player_score <= 8:
+            move = "hit"
+        elif player_score >= 17:
+            move = "stand"
+        elif player_score in hard_table and 0 <= dealer_up_value < len(hard_table[player_score]):
+            code = hard_table[player_score][dealer_up_value]
+            move = {"h": "hit", "s": "stand", "d": "double_down"}.get(code, "hit")
+        else:
+            move = "hit"
+
+    if move == "double_down" and "double_down" not in available_actions:
+        return "hit" if "hit" in available_actions else "stand"
+    if move == "split" and "split" not in available_actions:
+        return "hit" if "hit" in available_actions else "stand"
+    if move not in available_actions:
+        return "hit" if "hit" in available_actions else available_actions[0]
+    return move
+
+
+def _visible_dealer_cards(state: TableTurnState) -> list[str]:
+    if state.dealer_hidden and len(state.dealer_cards) >= 2:
+        return [state.dealer_cards[0], "??"]
+    return list(state.dealer_cards)
+
+
+def _serialize_table_hand(hand: TableHandState) -> dict:
+    return {
+        "hand_id": hand.hand_id,
+        "cards": list(hand.cards),
+        "score": hand_score(hand.cards),
+        "bet": hand.bet,
+        "status": hand.status,
+        "result": hand.result,
+        "payout": hand.payout,
+        "is_split_hand": hand.is_split_hand,
+        "doubled_down": hand.doubled_down,
+    }
+
+
+def _serialize_table_player_state(player_state: TablePlayerState) -> dict:
+    return {
+        "user_id": player_state.user_id,
+        "hands": [_serialize_table_hand(hand) for hand in player_state.hands],
+        "active_hand_index": player_state.active_hand_index,
+        "completed": player_state.completed,
+        "base_bet": player_state.base_bet,
+        "bankroll_at_start": player_state.bankroll_at_start,
+        "committed_bet": player_state.committed_bet,
+        "total_payout": player_state.total_payout,
+        "insurance_bet": player_state.insurance_bet,
+        "insurance_decided": player_state.insurance_decided,
+        "insurance_payout": player_state.insurance_payout,
+    }
 
 
 def _remaining_seconds(deadline: datetime) -> int:
@@ -368,18 +672,45 @@ def _track_turn_action_id(state: TableTurnState, action_id: str | None) -> bool:
 
 
 def _serialize_turn_state(state: TableTurnState) -> dict:
+    current_turn_user_id = _current_turn_user_id(state)
+    current_player_state = _current_turn_player_state(state)
+    current_hand_index = (
+        current_player_state.active_hand_index
+        if current_turn_user_id and current_player_state
+        else None
+    )
+    visible_dealer_cards = _visible_dealer_cards(state)
+    recommended_action = _recommended_basic_strategy_action(state)
+    dealer_score = None
+    if len(visible_dealer_cards) == 1:
+        dealer_score = card_value(visible_dealer_cards[0])
+    elif len(visible_dealer_cards) > 1 and "??" not in visible_dealer_cards:
+        dealer_score = hand_score(visible_dealer_cards)
+
     return {
         "table_id": state.table_id,
+        "round_id": state.round_id,
         "status": state.status,
+        "phase": state.phase,
         "players": state.players,
         "turn_index": state.turn_index if state.status == "active" else None,
-        "current_turn_user_id": _current_turn_user_id(state),
+        "current_turn_user_id": current_turn_user_id,
+        "current_hand_index": current_hand_index,
         "turn_seconds": state.turn_seconds,
         "turn_deadline": state.turn_deadline.isoformat() if state.status == "active" else None,
         "turn_remaining_seconds": _remaining_seconds(state.turn_deadline)
         if state.status == "active"
         else 0,
+        "available_actions": _available_actions_for_current_turn(state),
+        "recommended_action": recommended_action,
         "hand_number": state.hand_number,
+        "dealer_cards": visible_dealer_cards,
+        "dealer_score": dealer_score,
+        "dealer_hidden": state.dealer_hidden,
+        "player_states": {
+            user_id: _serialize_table_player_state(player_state)
+            for user_id, player_state in state.player_states.items()
+        },
         "last_action": state.last_action,
         "action_count": len(state.action_log),
         "started_at": state.started_at.isoformat(),
@@ -390,14 +721,23 @@ def _serialize_turn_state(state: TableTurnState) -> dict:
 def _idle_turn_state_payload(table_id: str) -> dict:
     return {
         "table_id": table_id,
+        "round_id": None,
         "status": "idle",
+        "phase": "idle",
         "players": [],
         "turn_index": None,
         "current_turn_user_id": None,
+        "current_hand_index": None,
         "turn_seconds": TURN_SECONDS,
         "turn_deadline": None,
         "turn_remaining_seconds": 0,
+        "available_actions": [],
+        "recommended_action": None,
         "hand_number": 0,
+        "dealer_cards": [],
+        "dealer_score": None,
+        "dealer_hidden": True,
+        "player_states": {},
         "last_action": None,
         "action_count": 0,
     }
@@ -452,8 +792,14 @@ def _clear_user_ready(user_id: str) -> list[str]:
         if user_id in ready_players:
             ready_players.discard(user_id)
             touched_table_ids.append(table_id)
+            pending_bets = _table_pending_bets.get(table_id)
+            if pending_bets:
+                pending_bets.pop(user_id, None)
+                if len(pending_bets) == 0:
+                    _table_pending_bets.pop(table_id, None)
         if len(ready_players) == 0:
             _table_ready.pop(table_id, None)
+            _table_pending_bets.pop(table_id, None)
     return touched_table_ids
 
 
@@ -518,32 +864,368 @@ def _clear_reconnect_deadline(user_id: str) -> None:
     _reconnect_deadlines.pop(user_id, None)
 
 
+def _load_user_balances(user_ids: list[str]) -> dict[str, float]:
+    if len(user_ids) == 0:
+        return {}
+    db = SessionLocal()
+    try:
+        users = db.scalars(select(User).where(User.id.in_(user_ids))).all()
+        return {user.id: round(float(user.balance), 2) for user in users}
+    finally:
+        db.close()
+
+
+def _position_to_next_playable_turn(state: TableTurnState) -> bool:
+    if len(state.players) == 0:
+        return False
+
+    if state.turn_index < 0 or state.turn_index >= len(state.players):
+        state.turn_index = 0
+
+    examined_players = 0
+    while examined_players < len(state.players):
+        user_id = state.players[state.turn_index]
+        player_state = state.player_states.get(user_id)
+        if not player_state:
+            state.turn_index = (state.turn_index + 1) % len(state.players)
+            examined_players += 1
+            continue
+
+        while player_state.active_hand_index < len(player_state.hands):
+            hand = player_state.hands[player_state.active_hand_index]
+            if _hand_is_playable(hand):
+                player_state.completed = False
+                state.turn_deadline = _next_deadline(state.turn_seconds)
+                state.updated_at = _utc_now()
+                return True
+            player_state.active_hand_index += 1
+
+        player_state.completed = True
+        state.turn_index = (state.turn_index + 1) % len(state.players)
+        examined_players += 1
+
+    return False
+
+
+def _settle_table_round(state: TableTurnState, completion_reason: str) -> None:
+    if state.phase == "settled":
+        return
+
+    state.phase = "dealer_turn"
+    state.dealer_hidden = False
+
+    dealer_has_blackjack = natural_blackjack(state.dealer_cards)
+    has_live_player_hand = any(
+        hand.result not in {"bust", "surrender"}
+        for player_state in state.player_states.values()
+        for hand in player_state.hands
+    )
+    if not dealer_has_blackjack and has_live_player_hand:
+        while hand_score(state.dealer_cards) < 17:
+            state.dealer_cards.append(_draw_table_card(state))
+            _record_turn_action(
+                state,
+                action="dealer_hit",
+                metadata={"dealer_score": hand_score(state.dealer_cards)},
+            )
+
+    dealer_score = hand_score(state.dealer_cards)
+    payout_by_user: dict[str, float] = {}
+    now = _utc_now()
+
+    for user_id, player_state in state.player_states.items():
+        total_payout = 0.0
+        player_state.completed = True
+        if player_state.active_hand_index >= len(player_state.hands):
+            player_state.active_hand_index = max(0, len(player_state.hands) - 1)
+
+        for hand in player_state.hands:
+            if hand.result == "bust":
+                hand.status = "resolved"
+                hand.payout = round(-hand.bet, 2)
+                total_payout += hand.payout
+                continue
+            if hand.result == "surrender":
+                hand.status = "resolved"
+                hand.payout = round(-(hand.bet / 2), 2)
+                total_payout += hand.payout
+                continue
+
+            player_score = hand_score(hand.cards)
+            player_has_blackjack = natural_blackjack(hand.cards) and not hand.is_split_hand
+
+            if player_has_blackjack and dealer_has_blackjack:
+                hand.result = "push"
+                hand.payout = 0.0
+            elif player_has_blackjack:
+                hand.result = "blackjack"
+                hand.payout = round(hand.bet * 1.5, 2)
+            elif dealer_has_blackjack:
+                hand.result = "lose"
+                hand.payout = round(-hand.bet, 2)
+            elif dealer_score > 21:
+                hand.result = "win"
+                hand.payout = round(hand.bet, 2)
+            elif player_score > dealer_score:
+                hand.result = "win"
+                hand.payout = round(hand.bet, 2)
+            elif player_score < dealer_score:
+                hand.result = "lose"
+                hand.payout = round(-hand.bet, 2)
+            else:
+                hand.result = "push"
+                hand.payout = 0.0
+
+            hand.status = "resolved"
+            total_payout += hand.payout
+
+        insurance_payout = 0.0
+        if player_state.insurance_bet > 0:
+            insurance_payout = (
+                round(player_state.insurance_bet * 2, 2)
+                if dealer_has_blackjack
+                else round(-player_state.insurance_bet, 2)
+            )
+            total_payout += insurance_payout
+        player_state.insurance_payout = round(insurance_payout, 2)
+        player_state.total_payout = round(total_payout, 2)
+        payout_by_user[user_id] = player_state.total_payout
+
+    db = SessionLocal()
+    try:
+        users = db.scalars(select(User).where(User.id.in_(list(payout_by_user.keys())))).all()
+        user_by_id = {user.id: user for user in users}
+
+        for user_id, total_payout in payout_by_user.items():
+            user = user_by_id.get(user_id)
+            if user is not None:
+                user.balance = round(max(0.0, float(user.balance) + total_payout), 2)
+                db.add(user)
+
+            player_state = state.player_states.get(user_id)
+            if not player_state:
+                continue
+
+            user_actions = [
+                entry["action"]
+                for entry in state.action_log
+                if entry.get("user_id") == user_id and isinstance(entry.get("action"), str)
+            ]
+            user_actions.append(f"table_round:{state.round_id}")
+
+            for hand in player_state.hands:
+                result = hand.result or "unknown"
+                if result in {"bust", "surrender"}:
+                    result = "lose"
+                log = RoundLog(
+                    user_id=user_id,
+                    bet=hand.bet,
+                    result=result,
+                    payout=round(hand.payout or 0.0, 2),
+                    player_score=hand_score(hand.cards),
+                    dealer_score=dealer_score,
+                    player_cards_json=json.dumps(hand.cards),
+                    dealer_cards_json=json.dumps(state.dealer_cards),
+                    actions_json=json.dumps(user_actions),
+                    created_at=state.started_at,
+                    ended_at=now,
+                )
+                db.add(log)
+
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+    state.phase = "settled"
+    state.status = "ended"
+    state.turn_deadline = _next_deadline(state.turn_seconds)
+    _record_turn_action(
+        state,
+        action="round_settled",
+        metadata={"reason": completion_reason, "dealer_score": dealer_score},
+    )
+
+
+def _apply_table_action(
+    state: TableTurnState,
+    user_id: str,
+    action: str,
+    timed_out: bool = False,
+) -> tuple[bool, str | None]:
+    if state.status != "active" or state.phase != "player_turns":
+        return False, "no active round"
+    if user_id != _current_turn_user_id(state):
+        return False, "not your turn"
+
+    player_state = _current_turn_player_state(state)
+    hand = _current_turn_hand(state)
+    if not player_state or not hand:
+        return False, "no active hand"
+    if not _hand_is_playable(hand):
+        return False, "hand is already resolved"
+
+    allowed_actions = _available_actions_for_current_turn(state)
+    if action not in allowed_actions:
+        return False, "action not allowed"
+
+    hand_index = player_state.active_hand_index
+    metadata = {
+        "hand_index": hand_index,
+        "hand_id": hand.hand_id,
+        "timed_out": timed_out,
+    }
+
+    if action != "insurance" and _can_take_insurance(state, player_state, hand):
+        player_state.insurance_decided = True
+        metadata["insurance_auto_declined"] = True
+
+    if action == "insurance":
+        insurance_bet = _insurance_bet_amount(player_state)
+        player_state.insurance_bet = insurance_bet
+        player_state.insurance_decided = True
+        player_state.committed_bet = round(player_state.committed_bet + insurance_bet, 2)
+        metadata["insurance_bet"] = insurance_bet
+        _record_turn_action(state, action=action, user_id=user_id, metadata=metadata)
+        state.turn_deadline = _next_deadline(state.turn_seconds)
+        state.updated_at = _utc_now()
+        return False, None
+    if action == "stand":
+        hand.status = "stood"
+        player_state.active_hand_index += 1
+    elif action == "hit":
+        hand.cards.append(_draw_table_card(state))
+        score = hand_score(hand.cards)
+        metadata["score"] = score
+        if score > 21:
+            hand.status = "bust"
+            hand.result = "bust"
+            hand.payout = round(-hand.bet, 2)
+            player_state.active_hand_index += 1
+        elif score == 21:
+            hand.status = "stood"
+            player_state.active_hand_index += 1
+    elif action == "double_down":
+        extra_bet = hand.bet
+        hand.bet = round(hand.bet * 2, 2)
+        hand.doubled_down = True
+        player_state.committed_bet = round(player_state.committed_bet + extra_bet, 2)
+        hand.cards.append(_draw_table_card(state))
+        score = hand_score(hand.cards)
+        metadata["score"] = score
+        if score > 21:
+            hand.status = "bust"
+            hand.result = "bust"
+            hand.payout = round(-hand.bet, 2)
+        else:
+            hand.status = "stood"
+        player_state.active_hand_index += 1
+    elif action == "split":
+        split_bet = hand.bet
+        player_state.committed_bet = round(player_state.committed_bet + split_bet, 2)
+        left_card, right_card = hand.cards
+        hand.cards = [left_card, _draw_table_card(state)]
+        hand.is_split_hand = True
+
+        split_hand = TableHandState(
+            hand_id=uuid4().hex[:12],
+            cards=[right_card, _draw_table_card(state)],
+            bet=split_bet,
+            is_split_hand=True,
+        )
+        player_state.hands.insert(hand_index + 1, split_hand)
+        first_score = hand_score(hand.cards)
+        metadata["split_cards"] = [left_card, right_card]
+        if first_score == 21:
+            hand.status = "stood"
+            player_state.active_hand_index += 1
+    elif action == "surrender":
+        hand.status = "surrendered"
+        hand.result = "surrender"
+        hand.payout = round(-(hand.bet / 2), 2)
+        player_state.active_hand_index += 1
+
+    action_name = "turn_timeout_auto_stand" if timed_out else action
+    _record_turn_action(state, action=action_name, user_id=user_id, metadata=metadata)
+
+    if _position_to_next_playable_turn(state):
+        return False, None
+
+    _settle_table_round(state, completion_reason="all_player_hands_resolved")
+    return True, None
+
+
 def _start_table_game(table: LobbyTable) -> TableTurnState | None:
     if len(table.players) < 2:
         return None
+
+    players = list(table.players)
+    pending_bets = _table_pending_bets.get(table.id, {})
+    user_balances = _load_user_balances(players)
+    forced_shoe = _table_forced_shoes.pop(table.id, None)
     state = TableTurnState(
         table_id=table.id,
-        players=list(table.players),
+        players=players,
         turn_index=0,
         turn_seconds=TURN_SECONDS,
         turn_deadline=_next_deadline(TURN_SECONDS),
         hand_number=1,
+        shoe=list(forced_shoe) if forced_shoe else build_deck(),
     )
-    _record_turn_action(state, action="table_game_started", metadata={"players": len(table.players)})
+    for user_id in players:
+        bet = _normalize_table_bet(pending_bets.get(user_id, DEFAULT_TABLE_BET))
+        player_hand = TableHandState(
+            hand_id=uuid4().hex[:12],
+            cards=[],
+            bet=bet,
+        )
+        state.player_states[user_id] = TablePlayerState(
+            user_id=user_id,
+            hands=[player_hand],
+            base_bet=bet,
+            bankroll_at_start=max(
+                round(float(user_balances.get(user_id, bet)), 2),
+                bet,
+            ),
+            committed_bet=bet,
+        )
+
+    # Deal order: each player, dealer up, each player, dealer hole.
+    for user_id in players:
+        state.player_states[user_id].hands[0].cards.append(_draw_table_card(state))
+    state.dealer_cards.append(_draw_table_card(state))
+    for user_id in players:
+        state.player_states[user_id].hands[0].cards.append(_draw_table_card(state))
+    state.dealer_cards.append(_draw_table_card(state))
+    state.dealer_hidden = True
+
+    for player_state in state.player_states.values():
+        if natural_blackjack(player_state.hands[0].cards):
+            player_state.hands[0].status = "blackjack"
+            player_state.active_hand_index = 1
+
+    _record_turn_action(
+        state,
+        action="table_game_started",
+        metadata={
+            "players": len(players),
+            "round_id": state.round_id,
+            "dealer_upcard": state.dealer_cards[0] if state.dealer_cards else None,
+        },
+    )
+
+    if not _position_to_next_playable_turn(state):
+        _settle_table_round(state, completion_reason="immediate_settle")
+
     _table_turn_states[table.id] = state
     _table_ready.pop(table.id, None)
+    _table_pending_bets.pop(table.id, None)
     return state
 
 
 def _advance_turn(state: TableTurnState) -> bool:
-    if len(state.players) < 2:
-        state.status = "ended"
-        state.updated_at = _utc_now()
-        return False
-    state.turn_index = (state.turn_index + 1) % len(state.players)
-    state.turn_deadline = _next_deadline(state.turn_seconds)
-    state.updated_at = _utc_now()
-    return True
+    return _position_to_next_playable_turn(state)
 
 
 async def _emit_lobby_snapshot_for_sid(sid: str) -> None:
@@ -646,6 +1328,8 @@ async def _stop_table_game(table_id: str, reason: str) -> None:
     if table_id not in _table_turn_states:
         return
     _table_turn_states.pop(table_id, None)
+    _table_pending_bets.pop(table_id, None)
+    _clear_forced_shoe(table_id)
     await sio.emit("table_game_ended", {"table_id": table_id, "reason": reason}, room=_table_room(table_id))
     await _emit_table_game_state(table_id)
 
@@ -655,8 +1339,9 @@ async def _handle_player_removed_from_turn_state(table_id: str, user_id: str) ->
     if not state or user_id not in state.players:
         return
 
-    removed_index = state.players.index(user_id)
-    state.players.pop(removed_index)
+    removed_current_turn_user = _current_turn_user_id(state) == user_id
+    state.players = [player_id for player_id in state.players if player_id != user_id]
+    state.player_states.pop(user_id, None)
     _record_turn_action(
         state,
         action="player_left_turn_cycle",
@@ -668,20 +1353,23 @@ async def _handle_player_removed_from_turn_state(table_id: str, user_id: str) ->
         await _stop_table_game(table_id, reason="not_enough_players")
         return
 
-    if removed_index < state.turn_index:
-        state.turn_index -= 1
-    elif removed_index == state.turn_index:
-        if state.turn_index >= len(state.players):
-            state.turn_index = 0
-        state.turn_deadline = _next_deadline(state.turn_seconds)
+    if state.turn_index >= len(state.players):
+        state.turn_index = 0
+
+    if state.status == "active" and state.phase == "player_turns":
+        has_next_turn = _position_to_next_playable_turn(state)
+        if not has_next_turn:
+            _settle_table_round(state, completion_reason="player_removed")
+    else:
+        state.updated_at = _utc_now()
+
+    if removed_current_turn_user:
         await sio.emit(
             "turn_skipped",
             {"table_id": table_id, "user_id": user_id, "reason": "player_left"},
             room=_table_room(table_id),
         )
 
-    state.turn_index %= len(state.players)
-    state.updated_at = _utc_now()
     await _emit_table_game_state(table_id)
 
 
@@ -689,6 +1377,8 @@ async def _emit_table_snapshot(table_id: str) -> None:
     table = lobby_service.get_table(table_id)
     if not table:
         _table_ready.pop(table_id, None)
+        _table_pending_bets.pop(table_id, None)
+        _clear_forced_shoe(table_id)
         _remove_table_social_state(table_id)
         await _clear_all_spectators_for_table(table_id)
         await _stop_table_game(table_id, reason="table_closed")
@@ -765,7 +1455,7 @@ async def _process_turn_timeouts() -> None:
         if not table or len(table.players) < 2 or len(state.players) < 2:
             await _stop_table_game(table_id, reason="not_enough_players")
             continue
-        if state.status != "active" or now < state.turn_deadline:
+        if state.status != "active" or state.phase != "player_turns" or now < state.turn_deadline:
             continue
 
         safety = 0
@@ -773,16 +1463,25 @@ async def _process_turn_timeouts() -> None:
             timed_out_user = _current_turn_user_id(state)
             if not timed_out_user:
                 break
-            _record_turn_action(state, action="turn_timeout_auto_pass", user_id=timed_out_user)
-            advanced = _advance_turn(state)
+            round_finished, error = _apply_table_action(
+                state,
+                user_id=timed_out_user,
+                action="stand",
+                timed_out=True,
+            )
+            if error:
+                break
             await sio.emit(
                 "turn_timeout",
                 {"table_id": table_id, "user_id": timed_out_user},
                 room=_table_room(table_id),
             )
-            if not advanced:
-                await _stop_table_game(table_id, reason="not_enough_players")
-                break
+            if round_finished:
+                await sio.emit(
+                    "table_round_resolved",
+                    _serialize_turn_state(state),
+                    room=_table_room(table_id),
+                )
             await _emit_table_game_state(table_id)
             safety += 1
 
@@ -1509,18 +2208,29 @@ async def set_ready(sid: str, data: dict | None = None) -> dict:
         return {"ok": False, "error": "table unavailable"}
     if table_id in _locked_tables and not has_role_at_least(identity.role, "mod"):
         return {"ok": False, "error": "table is locked by admin"}
-    if table_id in _table_turn_states:
+    existing_state = _table_turn_states.get(table_id)
+    if existing_state and existing_state.status == "active":
         return {"ok": False, "error": "table game already active"}
+    if existing_state and existing_state.status != "active":
+        _table_turn_states.pop(table_id, None)
 
     ready = bool((data or {}).get("ready", True))
+    bet = _normalize_table_bet((data or {}).get("bet", DEFAULT_TABLE_BET))
     ready_players = _table_ready.setdefault(table_id, set())
     if ready:
         ready_players.add(identity.user_id)
+        _table_pending_bets.setdefault(table_id, {})[identity.user_id] = bet
     else:
         ready_players.discard(identity.user_id)
+        pending_bets = _table_pending_bets.get(table_id)
+        if pending_bets:
+            pending_bets.pop(identity.user_id, None)
+            if len(pending_bets) == 0:
+                _table_pending_bets.pop(table_id, None)
 
     if len(ready_players) == 0:
         _table_ready.pop(table_id, None)
+        _table_pending_bets.pop(table_id, None)
 
     await _emit_table_snapshot(table_id)
 
@@ -1539,7 +2249,7 @@ async def set_ready(sid: str, data: dict | None = None) -> dict:
             await _emit_table_game_state(table_id)
 
     await _broadcast_lobby_snapshots()
-    return {"ok": True, "ready": ready}
+    return {"ok": True, "ready": ready, "bet": bet if ready else None}
 
 
 @sio.event
@@ -1746,15 +2456,15 @@ async def take_turn_action(sid: str, data: dict | None = None) -> dict:
         return {"ok": False, "error": "join a table first"}
 
     state = _table_turn_states.get(table_id)
-    if not state or state.status != "active":
-        return {"ok": False, "error": "no active turn cycle"}
+    if not state or state.status != "active" or state.phase != "player_turns":
+        return {"ok": False, "error": "no active table round"}
 
     current_turn_user_id = _current_turn_user_id(state)
     if identity.user_id != current_turn_user_id:
         return {"ok": False, "error": "not your turn"}
 
     action = str((data or {}).get("action", "")).strip().lower()
-    if action not in {"hit", "stand"}:
+    if action not in {"hit", "stand", "double_down", "split", "surrender", "insurance"}:
         return {"ok": False, "error": "invalid action"}
 
     action_id = str((data or {}).get("action_id", "")).strip() or None
@@ -1763,11 +2473,9 @@ async def take_turn_action(sid: str, data: dict | None = None) -> dict:
     if _track_turn_action_id(state, action_id):
         return {"ok": True, "state": _serialize_turn_state(state), "duplicate": True}
 
-    _record_turn_action(state, action=action, user_id=identity.user_id)
-    advanced = _advance_turn(state)
-    if not advanced:
-        await _stop_table_game(table_id, reason="not_enough_players")
-        return {"ok": True, "state": _idle_turn_state_payload(table_id)}
+    round_finished, error = _apply_table_action(state, identity.user_id, action)
+    if error:
+        return {"ok": False, "error": error}
 
     await sio.emit(
         "turn_action_applied",
@@ -1776,9 +2484,16 @@ async def take_turn_action(sid: str, data: dict | None = None) -> dict:
             "user_id": identity.user_id,
             "action": action,
             "next_turn_user_id": _current_turn_user_id(state),
+            "round_finished": round_finished,
         },
         room=_table_room(table_id),
     )
+    if round_finished:
+        await sio.emit(
+            "table_round_resolved",
+            _serialize_turn_state(state),
+            room=_table_room(table_id),
+        )
     await _emit_table_snapshot(table_id)
     await _emit_table_game_state(table_id)
     await _broadcast_lobby_snapshots()

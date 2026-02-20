@@ -3,12 +3,11 @@ import CommandCenter from "../components/landing/command-center"
 import Cta from "../components/landing/cta"
 import Features from "../components/landing/features"
 import Footer from "../components/landing/footer"
+import GamePosters from "../components/landing/game-posters"
 import Header from "../components/landing/header"
 import HowToPlay from "../components/landing/how-to-play"
-import Roadmap from "../components/landing/roadmap"
-import TechStack from "../components/landing/tech-stack"
 
-export default function SyntheticV0PageForDeployment() {
+export default function HomePage() {
   return (
     <main className="relative isolate overflow-x-clip pb-10" id="top">
       <AmbientCasino />
@@ -22,10 +21,9 @@ export default function SyntheticV0PageForDeployment() {
       />
       <Header />
       <Features />
-      <TechStack />
-      <HowToPlay />
       <CommandCenter />
-      <Roadmap />
+      <GamePosters />
+      <HowToPlay />
       <Cta />
       <Footer />
     </main>

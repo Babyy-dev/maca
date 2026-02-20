@@ -78,12 +78,12 @@ export default function ProfilePage() {
       <div className="mx-auto max-w-3xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-emerald-300">Profile</h1>
+            <h1 className="font-title text-3xl text-emerald-300 sm:text-5xl">Profile</h1>
             <p className="text-sm text-slate-200">
               Milestone 1 profile foundation with persistent editable fields.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
               href="/lobby"

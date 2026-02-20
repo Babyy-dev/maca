@@ -141,6 +141,12 @@
   }
 }
 
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+  }
+}
+
 @layer utilities {
   .font-title {
     font-family: var(--font-title), Impact, sans-serif;
@@ -846,5 +852,142 @@
 
   .dice-face.bottom {
     transform: rotateX(-90deg) translateZ(31px);
+  }
+}
+
+@media (max-width: 420px) {
+  .casino-container {
+    width: min(1120px, 100% - 1.2rem);
+  }
+
+  .premium-table {
+    min-height: 336px;
+    transform: rotateX(6deg) rotateZ(-1deg);
+  }
+
+  .dealer-arc {
+    top: 40px;
+    height: 104px;
+  }
+
+  .table-text {
+    top: 126px;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+  }
+
+  .cards-row {
+    bottom: 72px;
+    gap: 0.45rem;
+  }
+
+  .playing-card {
+    width: 74px;
+    height: 108px;
+  }
+
+  .card-corner {
+    font-size: 0.86rem;
+  }
+
+  .card-suit-main {
+    font-size: 1.7rem;
+  }
+
+  .card-dealer {
+    transform: translateY(-12px) rotate(-3deg) scale(0.9);
+  }
+
+  .chip-stack {
+    width: 50px;
+    border-width: 4px;
+  }
+
+  .chip-stack span {
+    font-size: 0.72rem;
+  }
+
+  .chip-a {
+    left: 22px;
+    bottom: 34px;
+  }
+
+  .chip-b {
+    right: 66px;
+    bottom: 36px;
+  }
+
+  .chip-c {
+    right: 22px;
+    bottom: 58px;
+  }
+
+  .dice-cube {
+    width: 52px;
+    height: 52px;
+    right: 20px;
+    top: 80px;
+  }
+
+  .dice-face.front {
+    transform: translateZ(26px);
+  }
+
+  .dice-face.back {
+    transform: rotateY(180deg) translateZ(26px);
+  }
+
+  .dice-face.left {
+    transform: rotateY(-90deg) translateZ(26px);
+  }
+
+  .dice-face.right {
+    transform: rotateY(90deg) translateZ(26px);
+  }
+
+  .dice-face.top {
+    transform: rotateX(90deg) translateZ(26px);
+  }
+
+  .dice-face.bottom {
+    transform: rotateX(-90deg) translateZ(26px);
+  }
+}
+
+@media (max-width: 480px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  button.rounded-md,
+  button.rounded-lg,
+  button.rounded-xl,
+  button.rounded-full,
+  a.rounded-md,
+  a.rounded-lg,
+  a.rounded-xl,
+  a.rounded-full {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 390px) {
+  .casino-container {
+    width: min(1120px, 100% - 1rem);
+  }
+
+  .font-title {
+    letter-spacing: 0.02em;
+  }
+}
+
+@media (max-width: 360px) {
+  header .rounded-lg,
+  header .rounded-full {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
   }
 }

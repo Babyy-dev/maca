@@ -2,20 +2,21 @@
 
 import { motion } from "framer-motion"
 import gsap from "gsap"
+import { Menu, X } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const NAV_LINKS = [
   { href: "#features", label: "Features" },
-  { href: "#flows", label: "Flows" },
-  { href: "#commands", label: "Commands" },
-  { href: "#roadmap", label: "Roadmap" },
+  { href: "#arena", label: "Arena" },
+  { href: "#posters", label: "Posters" },
+  { href: "#flows", label: "Play Guide" },
 ]
 
 const STATS = [
   { value: "2-8", label: "Players / Table" },
-  { value: "1:1", label: "Token to USD" },
-  { value: "Py + Redis", label: "Backend Core" },
+  { value: "3:2", label: "Blackjack Payout" },
+  { value: "Live", label: "Realtime Rounds" },
 ]
 
 function DiceFace({
@@ -91,6 +92,7 @@ function PlayingCard({
 }
 
 export default function Header() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const cardARef = useRef<HTMLDivElement | null>(null)
   const cardBRef = useRef<HTMLDivElement | null>(null)
@@ -202,14 +204,14 @@ export default function Header() {
       <div className="casino-container">
         <motion.nav
           animate={{ opacity: 1, y: 0 }}
-          className="mb-12 flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/15 bg-slate-900/45 px-4 py-2 backdrop-blur md:px-5"
+          className="relative mb-12 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/15 bg-slate-900/45 px-4 py-2 backdrop-blur md:rounded-full md:px-5"
           initial={{ opacity: 0, y: -20 }}
           transition={{ duration: 0.65 }}
         >
           <a className="font-title text-2xl text-amber-300 md:text-3xl" href="#top">
-            Project MACA
+            MACA Blackjack
           </a>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="hidden w-full flex-wrap items-center gap-2 text-sm sm:flex sm:w-auto sm:justify-end">
             {NAV_LINKS.map((item) => (
               <a
                 className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-slate-100 transition hover:-translate-y-0.5 hover:bg-white/12"
@@ -226,6 +228,39 @@ export default function Header() {
               Start Now
             </Link>
           </div>
+          <div className="flex items-center gap-2 sm:hidden">
+            <Link
+              className="rounded-full bg-gradient-to-r from-orange-400 to-pink-500 px-3 py-1 text-sm font-semibold text-slate-950"
+              href="/auth/register"
+            >
+              Start Now
+            </Link>
+            <button
+              aria-expanded={mobileMenuOpen}
+              aria-label="Toggle navigation menu"
+              className="rounded-full border border-white/20 bg-white/10 p-2 text-white"
+              onClick={() => setMobileMenuOpen((value) => !value)}
+              type="button"
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+          </div>
+          {mobileMenuOpen ? (
+            <div className="w-full rounded-2xl border border-white/15 bg-slate-950/85 p-2 sm:hidden">
+              <div className="flex flex-col gap-2 text-sm">
+                {NAV_LINKS.map((item) => (
+                  <a
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-slate-100"
+                    href={item.href}
+                    key={`mobile-${item.href}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </motion.nav>
 
         <div className="grid items-center gap-14 lg:grid-cols-[1fr_1.05fr]">
@@ -236,11 +271,11 @@ export default function Header() {
               transition={{ duration: 0.45, delay: 0.1 }}
               whileInView={{ opacity: 1, y: 0 }}
             >
-              Premium Casino Grade UI
+              Premium Casino Environment
             </motion.p>
 
             <motion.h1
-              className="font-title text-6xl leading-[0.88] text-white sm:text-7xl lg:text-8xl"
+              className="font-title text-4xl leading-[0.9] text-white sm:text-6xl lg:text-8xl"
               initial={{ opacity: 0, y: 26 }}
               transition={{ duration: 0.7, delay: 0.2 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -256,9 +291,8 @@ export default function Header() {
               transition={{ duration: 0.7, delay: 0.32 }}
               whileInView={{ opacity: 1, y: 0 }}
             >
-              Server-authoritative realtime platform with lobby flows, invite
-              codes, chat moderation, referral rewards, leaderboard competition,
-              and crypto deposit/withdraw support.
+              Step into MACA: immersive blackjack tables, animated casino
+              atmosphere, live turns, social chat, and competitive table play.
             </motion.p>
 
             <motion.div
@@ -275,14 +309,14 @@ export default function Header() {
               </Link>
               <a
                 className="rounded-xl border border-white/20 bg-white/5 px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white transition hover:-translate-y-1 hover:bg-white/10"
-                href="#features"
+                href="#posters"
               >
-                Explore Effects
+                View Posters
               </a>
             </motion.div>
 
             <motion.div
-              className="grid max-w-lg grid-cols-3 gap-3 text-center text-slate-100"
+              className="grid max-w-lg grid-cols-1 gap-3 text-center text-slate-100 sm:grid-cols-3"
               initial={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.65, delay: 0.5 }}
               whileInView={{ opacity: 1, y: 0 }}

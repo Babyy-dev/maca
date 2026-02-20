@@ -33,7 +33,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen px-4 py-16">
       <div className="mx-auto max-w-md rounded-2xl border border-white/15 bg-slate-900/55 p-6 backdrop-blur">
-        <h1 className="font-title text-5xl text-amber-300">Sign In</h1>
+        <h1 className="font-title text-3xl text-amber-300 sm:text-5xl">Sign In</h1>
         <p className="mt-2 text-sm text-slate-200">
           Continue to lobby, profile, and multiplayer table setup.
         </p>

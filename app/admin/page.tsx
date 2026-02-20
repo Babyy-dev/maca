@@ -273,12 +273,12 @@ export default function AdminPage() {
     return (
       <main className="min-h-screen px-4 py-12">
         <div className="mx-auto max-w-3xl rounded-2xl border border-white/15 bg-slate-900/55 p-6 backdrop-blur">
-          <h1 className="font-title text-5xl text-rose-300">Admin Access Required</h1>
+          <h1 className="font-title text-3xl text-rose-300 sm:text-5xl">Admin Access Required</h1>
           <p className="mt-2 text-sm text-slate-200">
             Current role is <span className="text-orange-300">{user?.role ?? "player"}</span>. This page
             requires at least `mod` role.
           </p>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Link
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
               href="/lobby"
@@ -302,7 +302,7 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-slate-900/55 p-4 backdrop-blur">
           <div>
-            <h1 className="font-title text-5xl text-orange-300">Admin Control</h1>
+            <h1 className="font-title text-3xl text-orange-300 sm:text-5xl">Admin Control</h1>
             <p className="text-sm text-slate-200">Milestone 5 dashboard: commands, audits, and role controls.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -369,7 +369,7 @@ export default function AdminPage() {
           <section className="glass-card rounded-2xl p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-title text-3xl text-white">Users</h2>
-              <form className="flex gap-2" onSubmit={onSearch}>
+              <form className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row" onSubmit={onSearch}>
                 <input
                   className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
                   onChange={(event) => setSearch(event.target.value)}
@@ -403,7 +403,7 @@ export default function AdminPage() {
                       </div>
 
                       <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto]">
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <select
                             className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
                             disabled={!canSetRole}
@@ -432,9 +432,9 @@ export default function AdminPage() {
                           </button>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <input
-                            className="w-28 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white sm:w-28"
                             onChange={(event) =>
                               setBalanceDraftByUser((previous) => ({
                                 ...previous,
@@ -486,7 +486,7 @@ export default function AdminPage() {
                 Realtime commands: /kick /mute /ban /spectate /lock_table /unlock_table /end_round /close_table
                 /add_balance /remove_balance /set_balance /set_role
               </p>
-              <form className="mt-3 flex gap-2" onSubmit={onRunCommand}>
+              <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={onRunCommand}>
                 <input
                   className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white"
                   onChange={(event) => setCommandText(event.target.value)}
@@ -504,7 +504,7 @@ export default function AdminPage() {
             </div>
 
             <div className="glass-card rounded-2xl p-5">
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-title text-3xl text-white">Audit Logs</h2>
                 <button
                   className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
