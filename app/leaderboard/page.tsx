@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { io, Socket } from "socket.io-client"
 
+import AuthActionButtons from "@/components/auth-action-buttons"
 import {
   ApiError,
   AuthUser,
@@ -280,6 +281,10 @@ export default function LeaderboardPage() {
             >
               Landing
             </Link>
+            <AuthActionButtons
+              loginClassName="rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-200"
+              logoutClassName="rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+            />
           </div>
         </header>
 

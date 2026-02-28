@@ -6,6 +6,8 @@ import { Menu, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
+import AuthActionButtons from "@/components/auth-action-buttons"
+
 const NAV_LINKS = [
   { href: "#features", label: "Features" },
   { href: "#arena", label: "Arena" },
@@ -227,6 +229,11 @@ export default function Header() {
             >
               Start Now
             </Link>
+            <AuthActionButtons
+              containerClassName="flex flex-wrap gap-2"
+              loginClassName="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-200"
+              logoutClassName="rounded-full border border-rose-300/40 bg-rose-500/10 px-3 py-1 font-semibold text-rose-200"
+            />
           </div>
           <div className="flex items-center gap-2 sm:hidden">
             <Link
@@ -258,6 +265,11 @@ export default function Header() {
                     {item.label}
                   </a>
                 ))}
+                <AuthActionButtons
+                  containerClassName="grid grid-cols-2 gap-2"
+                  loginClassName="rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-center font-semibold text-cyan-200"
+                  logoutClassName="rounded-xl border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-center font-semibold text-rose-200"
+                />
               </div>
             </div>
           ) : null}
