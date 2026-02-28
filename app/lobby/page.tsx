@@ -1084,6 +1084,12 @@ export default function LobbyPage() {
             </Link>
             <Link
               className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
+              href="/game/multiplayer"
+            >
+              Multiplayer
+            </Link>
+            <Link
+              className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
               href="/profile"
             >
               Profile
@@ -1638,7 +1644,7 @@ export default function LobbyPage() {
                   <div className="mt-3 space-y-3">
                     <div className="rounded-xl border border-white/15 bg-black/20 p-3">
                       <div className="mb-2 flex flex-wrap gap-2">
-                        {["🂡", "🎲", "🔥", "👏", "💰", "😎"].map((emoji) => (
+                        {["\u{1F0A1}", "\u{1F3B2}", "\u{1F525}", "\u{1F44F}", "\u{1F4B0}", "\u{1F60E}"].map((emoji) => (
                           <button
                             className="rounded-md border border-white/20 bg-white/5 px-2 py-1 text-lg disabled:opacity-40"
                             disabled={isViewingAsSpectator || !isCurrentUserParticipant}
