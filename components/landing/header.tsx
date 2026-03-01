@@ -7,7 +7,6 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
 import AuthActionButtons from "@/components/auth-action-buttons"
-import PerformanceModeControl from "@/components/performance-mode-control"
 import { useMotionProfile } from "@/hooks/use-motion-profile"
 
 const NAV_LINKS = [
@@ -97,7 +96,7 @@ function PlayingCard({
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { mode, setMode, profile } = useMotionProfile()
+  const { profile } = useMotionProfile()
   const headerProfile = profile.header
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const cardARef = useRef<HTMLDivElement | null>(null)
@@ -283,10 +282,6 @@ export default function Header() {
             >
               Start Now
             </Link>
-            <PerformanceModeControl
-              mode={mode}
-              onChange={setMode}
-            />
             <AuthActionButtons
               containerClassName="flex flex-wrap gap-2"
               loginClassName="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-200"
@@ -327,12 +322,6 @@ export default function Header() {
                   containerClassName="grid grid-cols-2 gap-2"
                   loginClassName="rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-center font-semibold text-cyan-200"
                   logoutClassName="rounded-xl border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-center font-semibold text-rose-200"
-                />
-                <PerformanceModeControl
-                  className="inline-flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-slate-100"
-                  mode={mode}
-                  onChange={setMode}
-                  selectClassName="rounded-md border border-white/20 bg-slate-900/80 px-2 py-1 text-xs text-slate-100"
                 />
               </div>
             </div>

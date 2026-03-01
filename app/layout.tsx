@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Bebas_Neue, JetBrains_Mono, Manrope } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import GlobalNavbar from '@/components/global-navbar'
 import './globals.css'
 
 const manrope = Manrope({
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body
         className={`${manrope.variable} ${bebasNeue.variable} ${jetBrainsMono.variable} font-sans antialiased`}
       >
+        <GlobalNavbar />
         {children}
         <Analytics />
       </body>

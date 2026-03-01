@@ -8,7 +8,6 @@ import gsap from "gsap"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 
 import AuthActionButtons from "@/components/auth-action-buttons"
-import PerformanceModeControl from "@/components/performance-mode-control"
 import { useMotionProfile } from "@/hooks/use-motion-profile"
 import { AuthUser, getMe, getStoredToken } from "@/lib/maca-api"
 
@@ -360,7 +359,7 @@ export default function SinglePlayerGamePage() {
   const userBankInitializedRef = useRef(false)
   const actionLockRef = useRef(false)
   const reducedMotion = useReducedMotion()
-  const { mode, setMode, profile } = useMotionProfile()
+  const { profile } = useMotionProfile()
   const gameMotionProfile = profile.game
 
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -1127,10 +1126,6 @@ export default function SinglePlayerGamePage() {
           <div>
             <h1 className="font-title text-2xl text-emerald-300 max-[360px]:text-xl sm:text-4xl">MACA Blackjack Table</h1>
             <p className="text-xs text-slate-200 sm:text-sm">Live table flow: deal, hit, stand, double down, split, dealer settle.</p>
-            <p className="text-[11px] text-slate-300 sm:text-xs">
-              Animation: {mode.toUpperCase()}{" "}
-              {mode === "auto" ? `(${profile.resolvedMode.toUpperCase()})` : ""}
-            </p>
             {authError ? <p className="text-xs text-rose-300">{authError}</p> : null}
           </div>
 
@@ -1138,13 +1133,6 @@ export default function SinglePlayerGamePage() {
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/lobby">Lobby</Link>
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/game/multiplayer">Multiplayer</Link>
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/profile">Profile</Link>
-            <PerformanceModeControl
-              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-xs text-slate-100 max-[360px]:px-1.5"
-              compact
-              mode={mode}
-              onChange={setMode}
-              selectClassName="rounded-md border border-white/20 bg-slate-900/80 px-2 py-1 text-[11px] text-slate-100"
-            />
             <AuthActionButtons
               loginClassName="touch-target inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
               logoutClassName="touch-target inline-flex items-center rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
