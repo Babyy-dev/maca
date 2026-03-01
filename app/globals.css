@@ -147,10 +147,43 @@
   }
 }
 
+@media (max-width: 900px) {
+  .casino-ambient {
+    display: none;
+  }
+
+  .glass-card {
+    backdrop-filter: blur(4px);
+  }
+
+  .table-mobile-scroll {
+    max-height: min(45vh, 360px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
+
 @layer utilities {
   .font-title {
     font-family: var(--font-title), Impact, sans-serif;
     letter-spacing: 0.04em;
+  }
+
+  .safe-bottom-pad {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  .safe-sticky-bottom {
+    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  .touch-target {
+    min-height: 44px;
+  }
+
+  .table-mobile-scroll {
+    max-height: none;
+    overflow: visible;
   }
 
   .casino-container {
@@ -972,6 +1005,15 @@
   a.rounded-full {
     min-height: 40px;
   }
+
+  .premium-table {
+    transform: rotateX(0deg) rotateZ(0deg);
+  }
+
+  .premium-table .chip-stack,
+  .premium-table .dice-cube {
+    display: none;
+  }
 }
 
 @media (max-width: 390px) {
@@ -985,9 +1027,89 @@
 }
 
 @media (max-width: 360px) {
+  .safe-bottom-pad {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
   header .rounded-lg,
   header .rounded-full {
     padding-left: 0.6rem;
     padding-right: 0.6rem;
+  }
+
+  .premium-table {
+    min-height: 300px;
+  }
+
+  .table-mobile-scroll {
+    max-height: min(40vh, 300px);
+  }
+
+  .dealer-arc {
+    top: 34px;
+    height: 92px;
+    width: 78%;
+  }
+
+  .table-text {
+    top: 112px;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+  }
+
+  .playing-card {
+    width: 64px;
+    height: 92px;
+  }
+
+  .card-corner {
+    font-size: 0.72rem;
+  }
+
+  .card-suit-main {
+    font-size: 1.38rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .casino-ambient,
+  .table-glow,
+  .glow-ring::before {
+    display: none !important;
+  }
+}
+
+@media (max-width: 340px) {
+  .premium-table {
+    min-height: 284px;
+  }
+
+  .table-mobile-scroll {
+    max-height: min(38vh, 270px);
+  }
+
+  .playing-card {
+    width: 58px;
+    height: 84px;
+  }
+
+  .card-corner {
+    font-size: 0.66rem;
+  }
+
+  .card-suit-main {
+    font-size: 1.22rem;
   }
 }

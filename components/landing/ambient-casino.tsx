@@ -21,6 +21,11 @@ export default function AmbientCasino() {
   const diceRefs = useRef<Array<HTMLDivElement | null>>([])
 
   useEffect(() => {
+    const shouldReduceMotion =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(max-width: 900px)").matches
+    if (shouldReduceMotion) return
+
     const ctx = gsap.context(() => {
       const cards = shuffleRefs.current.filter(
         (item): item is HTMLDivElement => Boolean(item),

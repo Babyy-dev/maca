@@ -6,6 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "backend:dev": "python -m uvicorn app.main:app --reload --app-dir backend --port 8000",
+    "smoke": "node scripts/smoke.js",
+    "smoke:backend": "node scripts/smoke.js --backend-only",
+    "smoke:frontend": "node scripts/smoke.js --frontend-only",
     "lint": "eslint .",
     "start": "next start"
   },

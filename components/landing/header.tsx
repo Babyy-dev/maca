@@ -105,6 +105,11 @@ export default function Header() {
   const tableGlowRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    const shouldReduceMotion =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(max-width: 900px)").matches
+    if (shouldReduceMotion) return
+
     const ctx = gsap.context(() => {
       const cards = [cardARef.current, cardBRef.current]
 

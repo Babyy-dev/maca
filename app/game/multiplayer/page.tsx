@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
-import { FormEvent, useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { FormEvent, memo, useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { io, Socket } from "socket.io-client"
 
 import AuthActionButtons from "@/components/auth-action-buttons"
@@ -38,11 +38,60 @@ type TableCardView = {
   hidden: boolean
 }
 
+type RoundBanner = {
+  id: string
+  label: "WIN" | "LOSE" | "PUSH" | "BLACKJACK"
+  net: number
+}
+
 const SUIT_SYMBOL: Record<string, string> = {
   S: "\u2660",
   H: "\u2665",
   D: "\u2666",
   C: "\u2663",
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+function formatMoney(value: number): string {
+  return roundMoney(value).toFixed(2)
+}
+
+function cardNumericValue(raw: string): number {
+  if (!raw || raw === "??") return 0
+  const rank = raw.slice(0, -1).toUpperCase()
+  if (rank === "A") return 11
+  if (rank === "K" || rank === "Q" || rank === "J") return 10
+  return Number.parseInt(rank, 10) || 0
+}
+
+function handTotalFromCards(cards: string[]): number {
+  let total = 0
+  let aces = 0
+  cards.forEach((card) => {
+    if (card === "??") return
+    const rank = card.slice(0, -1).toUpperCase()
+    if (rank === "A") aces += 1
+    total += cardNumericValue(card)
+  })
+  while (total > 21 && aces > 0) {
+    total -= 10
+    aces -= 1
+  }
+  return total
+}
+
+function dealerTotalLabel(cards: string[] | undefined, fallbackScore: number | null | undefined): string {
+  if (!cards || cards.length === 0) return "-"
+  if (cards.includes("??")) {
+    const visibleCards = cards.filter((card) => card !== "??")
+    const visibleTotal = handTotalFromCards(visibleCards)
+    return `${visibleTotal} + ?`
+  }
+  if (typeof fallbackScore === "number") return String(fallbackScore)
+  return String(handTotalFromCards(cards))
 }
 
 function shortId(value: string | null | undefined): string {
@@ -90,14 +139,22 @@ function remainingFromDeadline(deadline: string | null | undefined): number {
   return Math.max(0, Math.ceil(ms / 1000))
 }
 
-function PlayingCard({ card, index }: { card: string; index: number }) {
+const PlayingCard = memo(function PlayingCard({
+  card,
+  index,
+  liteMotion,
+}: {
+  card: string
+  index: number
+  liteMotion: boolean
+}) {
   const parsed = cardToView(card)
   return (
     <motion.div
       className="playing-card"
-      initial={{ opacity: 0, y: -100, rotate: -6 }}
+      initial={liteMotion ? false : { opacity: 0, y: -100, rotate: -6 }}
       animate={{ opacity: 1, y: 0, rotate: index % 2 === 0 ? -2 : 2 }}
-      transition={{ duration: 0.28, delay: index * 0.03 }}
+      transition={liteMotion ? { duration: 0 } : { duration: 0.28, delay: index * 0.03 }}
     >
       <div
         className="card-face card-front"
@@ -127,13 +184,19 @@ function PlayingCard({ card, index }: { card: string; index: number }) {
       </div>
     </motion.div>
   )
-}
+})
 
 export default function MultiplayerGamePage() {
   const router = useRouter()
   const socketRef = useRef<Socket | null>(null)
+  const pendingReadyRef = useRef(false)
+  const pendingActionRef = useRef(false)
+  const reducedMotion = useReducedMotion()
   const [readyBet, setReadyBet] = useState("10")
   const [tick, setTick] = useState(0)
+  const [roundBanner, setRoundBanner] = useState<RoundBanner | null>(null)
+  const [isSubmittingReady, setIsSubmittingReady] = useState(false)
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false)
   const [state, dispatch] = useReducer(multiplayerReducer, createInitialMultiplayerState())
 
   const commit = (mutation: MultiplayerMutation) => dispatch(mutation)
@@ -158,11 +221,41 @@ export default function MultiplayerGamePage() {
     void tick
     return remainingFromDeadline(activeGameState?.turn_deadline)
   }, [activeGameState, tick])
+  const liteMotion = Boolean(reducedMotion)
+  const dealerTotal = useMemo(
+    () => dealerTotalLabel(activeGameState?.dealer_cards, activeGameState?.dealer_score),
+    [activeGameState?.dealer_cards, activeGameState?.dealer_score],
+  )
 
   useEffect(() => {
+    const myUserId = state.user?.id
+    if (!myUserId) return
+    const isMyActiveTurn =
+      activeGameState?.status === "active" &&
+      activeGameState.current_turn_user_id === myUserId
+    if (isMyActiveTurn) return
+    if (pendingActionRef.current || isSubmittingAction) {
+      pendingActionRef.current = false
+      setIsSubmittingAction(false)
+    }
+  }, [
+    activeGameState?.status,
+    activeGameState?.current_turn_user_id,
+    state.user?.id,
+    isSubmittingAction,
+  ])
+
+  useEffect(() => {
+    if (!roundBanner) return
+    const timer = setTimeout(() => setRoundBanner(null), 2200)
+    return () => clearTimeout(timer)
+  }, [roundBanner])
+
+  useEffect(() => {
+    if (activeGameState?.status !== "active" || !activeGameState.turn_deadline) return
     const timer = setInterval(() => setTick((prev) => prev + 1), 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [activeGameState?.status, activeGameState?.turn_deadline])
 
   useEffect(() => {
     const storedToken = getStoredToken()
@@ -187,7 +280,7 @@ export default function MultiplayerGamePage() {
         const [me, tables] = await Promise.all([getMe(authToken), listTables(authToken)])
         commit({ type: "set_user", payload: me })
         commit({ type: "set_tables", payload: tables })
-        setupSocket(authToken, persistedTableId, persistedSpectatorTableId)
+        setupSocket(authToken, me.id)
       } catch (caught) {
         const message =
           caught instanceof ApiError ? caught.message : "Failed to load multiplayer state"
@@ -207,8 +300,7 @@ export default function MultiplayerGamePage() {
 
   function setupSocket(
     authToken: string,
-    persistedTableId: string | null,
-    persistedSpectatorTableId: string | null,
+    userId: string,
   ): void {
     const socket = io(API_BASE, {
       path: "/socket.io",
@@ -223,12 +315,18 @@ export default function MultiplayerGamePage() {
     socket.on("connect", () => {
       commit({ type: "set_realtime_connected", payload: true })
       commit({ type: "set_notice", payload: "Realtime connected." })
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
       socket.emit("join_lobby", {})
+      const preferredTableId = getStoredTableId(ACTIVE_TABLE_STORAGE_KEY)
+      const preferredSpectatorTableId = getStoredTableId(SPECTATOR_TABLE_STORAGE_KEY)
       socket.emit(
         "sync_state",
         {
-          preferred_table_id: persistedTableId,
-          preferred_mode: persistedSpectatorTableId ? "spectator" : "auto",
+          preferred_table_id: preferredTableId,
+          preferred_mode: preferredSpectatorTableId ? "spectator" : "auto",
         },
         (response: RealtimeAck) => {
           if (!response?.ok) return
@@ -250,6 +348,10 @@ export default function MultiplayerGamePage() {
     socket.on("disconnect", () => {
       commit({ type: "set_realtime_connected", payload: false })
       commit({ type: "set_notice", payload: "Realtime disconnected." })
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
     })
 
     socket.on("reconnect_attempt", () => {
@@ -268,22 +370,48 @@ export default function MultiplayerGamePage() {
     socket.on("table_game_state", (payload: TableGameState) => {
       if (!payload.table_id) return
       commit({ type: "upsert_game_state", payload })
+      if (payload.status !== "active") {
+        pendingActionRef.current = false
+        setIsSubmittingAction(false)
+      }
     })
 
     socket.on("table_game_started", (payload: TableGameState) => {
       if (!payload.table_id) return
       commit({ type: "upsert_game_state", payload })
       commit({ type: "set_notice", payload: `Round started on table ${payload.table_id}` })
+      pendingActionRef.current = false
+      setIsSubmittingAction(false)
     })
 
     socket.on("table_round_resolved", (payload: TableGameState) => {
       if (!payload.table_id) return
       commit({ type: "upsert_game_state", payload })
       commit({ type: "set_notice", payload: `Round settled on table ${payload.table_id}` })
+      pendingActionRef.current = false
+      setIsSubmittingAction(false)
+      const myState = payload.player_states?.[userId]
+      if (!myState) return
+      const net = roundMoney(myState.total_payout ?? 0)
+      const hasBlackjack = myState.hands.some((hand) => hand.result === "blackjack")
+      const label: RoundBanner["label"] = hasBlackjack
+        ? "BLACKJACK"
+        : net > 0
+          ? "WIN"
+          : net < 0
+            ? "LOSE"
+            : "PUSH"
+      setRoundBanner({
+        id: createActionId("stand"),
+        label,
+        net,
+      })
     })
 
     socket.on("table_game_ended", (payload: { table_id?: string; reason?: string }) => {
       if (!payload.table_id) return
+      pendingActionRef.current = false
+      setIsSubmittingAction(false)
       commit({
         type: "set_notice",
         payload: `Table ${payload.table_id} ended: ${payload.reason ?? "unknown reason"}`,
@@ -292,6 +420,10 @@ export default function MultiplayerGamePage() {
 
     socket.on("table_joined", (payload: { table_id?: string }) => {
       if (!payload.table_id) return
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
       commit({ type: "set_active_table", payload: payload.table_id })
       commit({ type: "set_spectator_table", payload: null })
       setStoredTableId(ACTIVE_TABLE_STORAGE_KEY, payload.table_id)
@@ -300,6 +432,10 @@ export default function MultiplayerGamePage() {
 
     socket.on("table_left", (payload: { table_id?: string }) => {
       if (!payload.table_id) return
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
       commit({ type: "set_notice", payload: `Left table ${payload.table_id}` })
       commit({ type: "set_active_table", payload: null })
       commit({ type: "set_spectator_table", payload: null })
@@ -309,6 +445,10 @@ export default function MultiplayerGamePage() {
 
     socket.on("spectator_joined", (payload: { table_id?: string; mode?: "player" | "spectator" }) => {
       if (!payload.table_id) return
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
       commit({ type: "set_active_table", payload: payload.table_id })
       setStoredTableId(ACTIVE_TABLE_STORAGE_KEY, payload.table_id)
       if (payload.mode === "spectator") {
@@ -327,6 +467,10 @@ export default function MultiplayerGamePage() {
 
     socket.on("turn_timeout", (payload: { table_id?: string; user_id?: string }) => {
       if (!payload.table_id) return
+      if (payload.user_id && payload.user_id === userId) {
+        pendingActionRef.current = false
+        setIsSubmittingAction(false)
+      }
       commit({
         type: "set_notice",
         payload: `Turn timeout on ${payload.table_id}: ${shortId(payload.user_id)}`,
@@ -335,6 +479,10 @@ export default function MultiplayerGamePage() {
 
     socket.on("table_closed", (payload: { table_id?: string }) => {
       if (!payload.table_id) return
+      pendingActionRef.current = false
+      pendingReadyRef.current = false
+      setIsSubmittingAction(false)
+      setIsSubmittingReady(false)
       commit({ type: "remove_table", payload: payload.table_id })
       commit({ type: "remove_game_state", payload: payload.table_id })
       if (getStoredTableId(ACTIVE_TABLE_STORAGE_KEY) === payload.table_id) {
@@ -354,9 +502,21 @@ export default function MultiplayerGamePage() {
       throw new Error("Realtime connection unavailable")
     }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("Realtime request timeout")), 8000)
-      socket.emit(eventName, payload, (response: RealtimeAck) => {
+      const cleanup = (): void => {
         clearTimeout(timer)
+        socket.off("disconnect", onDisconnect)
+      }
+      const onDisconnect = (): void => {
+        cleanup()
+        reject(new Error("Realtime disconnected"))
+      }
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error("Realtime request timeout"))
+      }, 8000)
+      socket.on("disconnect", onDisconnect)
+      socket.emit(eventName, payload, (response: RealtimeAck) => {
+        cleanup()
         if (!response?.ok) {
           reject(new Error(response?.error ?? "Realtime request failed"))
           return
@@ -398,9 +558,12 @@ export default function MultiplayerGamePage() {
 
   async function onSetReady(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
+    if (pendingReadyRef.current) return
     if (!activeTable) return
     const parsedBet = Number.parseFloat(readyBet)
-    const bet = Number.isFinite(parsedBet) ? parsedBet : 10
+    const bet = Number.isFinite(parsedBet) && parsedBet > 0 ? parsedBet : 10
+    pendingReadyRef.current = true
+    setIsSubmittingReady(true)
     try {
       await emitRealtime("set_ready", {
         ready: !isCurrentUserReady,
@@ -415,12 +578,19 @@ export default function MultiplayerGamePage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to update ready state"
       commit({ type: "set_notice", payload: message })
+    } finally {
+      pendingReadyRef.current = false
+      setIsSubmittingReady(false)
     }
   }
 
   async function onTurnAction(
     action: "hit" | "stand" | "double_down" | "split" | "surrender" | "insurance",
   ): Promise<void> {
+    if (pendingActionRef.current) return
+    if (!isMyTurn || isViewingAsSpectator || !myAvailableActions.includes(action)) return
+    pendingActionRef.current = true
+    setIsSubmittingAction(true)
     try {
       const response = await emitRealtime("take_turn_action", {
         action,
@@ -432,6 +602,9 @@ export default function MultiplayerGamePage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit turn action"
       commit({ type: "set_notice", payload: message })
+    } finally {
+      pendingActionRef.current = false
+      setIsSubmittingAction(false)
     }
   }
 
@@ -446,18 +619,18 @@ export default function MultiplayerGamePage() {
   }
 
   return (
-    <main className="min-h-screen px-3 pb-10 pt-4 sm:px-5 sm:pt-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
+    <main className="safe-bottom-pad min-h-screen px-3 pb-10 pt-4 max-[360px]:px-2 max-[360px]:pt-3 sm:px-5 sm:pt-6">
+      <div className="mx-auto flex w-full max-w-[98vw] flex-col gap-4">
+        <header className="glass-card flex flex-wrap items-start justify-between gap-3 rounded-2xl px-3 py-3 max-[360px]:gap-2 max-[360px]:px-2.5 sm:items-center sm:px-4">
           <div>
-            <h1 className="font-title text-2xl text-emerald-300 sm:text-4xl">Multiplayer Poker Table</h1>
+            <h1 className="font-title text-2xl text-emerald-300 max-[360px]:text-xl sm:text-4xl">Multiplayer Poker Table</h1>
             <p className="text-xs text-slate-200 sm:text-sm">
               Backend-driven realtime blackjack with turn timers and table actions.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 max-[360px]:gap-1.5 sm:w-auto sm:justify-end">
             <span
-              className={`rounded-lg border px-3 py-2 text-xs ${
+              className={`touch-target inline-flex items-center rounded-lg border px-3 py-2 text-xs max-[360px]:px-2 max-[360px]:text-[11px] ${
                 state.isRealtimeConnected
                   ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-200"
                   : "border-amber-300/40 bg-amber-400/10 text-amber-200"
@@ -465,15 +638,15 @@ export default function MultiplayerGamePage() {
             >
               {state.isRealtimeConnected ? "Realtime Connected" : "Realtime Offline"}
             </span>
-            <Link className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white sm:text-sm" href="/lobby">
+            <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/lobby">
               Lobby
             </Link>
-            <Link className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white sm:text-sm" href="/game/single-player">
+            <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/game/single-player">
               Single Player
             </Link>
             <AuthActionButtons
-              loginClassName="rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 sm:text-sm"
-              logoutClassName="rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 sm:text-sm"
+              loginClassName="touch-target inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
+              logoutClassName="touch-target inline-flex items-center rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
             />
           </div>
         </header>
@@ -484,8 +657,8 @@ export default function MultiplayerGamePage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[1.55fr_0.85fr]">
-          <section className="glass-card glow-ring rounded-3xl p-4 sm:p-6">
+        <div className="grid gap-4 xl:grid-cols-[1.9fr_0.7fr]">
+          <section className="glass-card glow-ring rounded-3xl p-4 max-[360px]:p-3 sm:p-6">
             {activeTable ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -510,7 +683,7 @@ export default function MultiplayerGamePage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="touch-target inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white max-[360px]:px-2 max-[360px]:text-xs"
                       onClick={() => {
                         onSpectateTable(activeTable.id).catch(() => undefined)
                       }}
@@ -519,7 +692,7 @@ export default function MultiplayerGamePage() {
                       Spectate
                     </button>
                     <button
-                      className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white"
+                      className="touch-target inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white max-[360px]:px-2 max-[360px]:text-xs"
                       onClick={() => {
                         onLeaveTable().catch(() => undefined)
                       }}
@@ -531,69 +704,133 @@ export default function MultiplayerGamePage() {
                 </div>
 
                 <div className="table-scene mt-5">
-                  <div className="premium-table">
+                  <div className="premium-table !min-h-[70vh] sm:!min-h-[74vh]">
                     <div className="dealer-arc" />
                     <div className="table-text">LIVE MULTIPLAYER ROUND</div>
                     <div className="table-glow" />
 
-                    <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-white/20 bg-black/30 px-4 py-1 text-xs text-slate-100 sm:top-4 sm:text-sm">
+                    <AnimatePresence>
+                      {roundBanner ? (
+                        <motion.div
+                          className="pointer-events-none absolute inset-0 z-20 grid place-items-center"
+                          initial={{ opacity: 0, scale: 0.74 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 1.06 }}
+                          transition={{ duration: 0.42, ease: "easeOut" }}
+                        >
+                          <div
+                            className={`rounded-2xl border px-8 py-5 text-center shadow-2xl backdrop-blur max-[360px]:px-4 max-[360px]:py-3 ${
+                              roundBanner.net > 0
+                                ? "border-emerald-200/40 bg-emerald-400/15"
+                                : roundBanner.net < 0
+                                  ? "border-rose-200/40 bg-rose-400/15"
+                                  : "border-amber-200/40 bg-amber-400/15"
+                            }`}
+                          >
+                            <p className="font-title text-3xl max-[360px]:text-2xl sm:text-6xl">{roundBanner.label}</p>
+                            <p
+                              className={`mt-1 text-lg font-semibold max-[360px]:text-base sm:text-2xl ${
+                                roundBanner.net > 0
+                                  ? "text-emerald-100"
+                                  : roundBanner.net < 0
+                                    ? "text-rose-100"
+                                    : "text-amber-100"
+                              }`}
+                            >
+                              {roundBanner.net >= 0 ? "+" : "-"}${formatMoney(Math.abs(roundBanner.net))}
+                            </p>
+                          </div>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+
+                    <div className="absolute left-1/2 top-3 max-w-[94%] -translate-x-1/2 rounded-full border border-white/20 bg-black/30 px-4 py-1 text-xs text-slate-100 max-[360px]:px-2.5 max-[360px]:text-[10px] sm:top-4 sm:text-sm">
                       Phase: {activeGameState?.phase ?? "idle"} | Turn:{" "}
                       {shortId(activeGameState?.current_turn_user_id)}
                       {activeGameState?.status === "active" ? ` (${activeTurnRemaining}s)` : ""}
                     </div>
-
-                    <div className="absolute left-1/2 top-14 flex -translate-x-1/2 flex-wrap justify-center gap-2 sm:gap-3">
-                      <AnimatePresence>
-                        {(activeGameState?.dealer_cards ?? []).map((card, index) => (
-                          <PlayingCard card={card} index={index} key={`dealer-${card}-${index}`} />
-                        ))}
-                      </AnimatePresence>
+                    <div className="absolute left-1/2 top-10 max-w-[94%] -translate-x-1/2 rounded-full border border-white/20 bg-black/30 px-4 py-1 text-xs text-cyan-100 max-[360px]:px-2.5 max-[360px]:text-[10px] sm:top-12 sm:text-sm">
+                      Dealer Total: {dealerTotal}
                     </div>
 
-                    <div className="absolute bottom-24 left-1/2 w-[96%] -translate-x-1/2">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {activeTable.players.map((playerId) => {
-                          const playerState = activeGameState?.player_states?.[playerId]
-                          const isTurn = activeGameState?.current_turn_user_id === playerId
-                          return (
-                            <div
-                              className={`rounded-2xl border p-3 ${
-                                isTurn
-                                  ? "border-cyan-300/55 bg-cyan-500/10"
-                                  : "border-white/20 bg-black/25"
-                              }`}
-                              key={playerId}
-                            >
-                              <p className="text-xs text-slate-100">
-                                {shortId(playerId)}
-                                {playerId === state.user?.id ? " (you)" : ""}
-                              </p>
-                              {!playerState ? (
-                                <p className="mt-2 text-xs text-slate-400">Waiting for round state...</p>
-                              ) : (
-                                <div className="mt-2 space-y-2">
-                                  {playerState.hands.map((hand, handIndex) => (
-                                    <div className="rounded-lg border border-white/15 bg-black/20 p-2" key={hand.hand_id}>
-                                      <p className="text-[11px] text-slate-300">
-                                        Hand {handIndex + 1} | Score {hand.score} | Bet {hand.bet} |{" "}
-                                        {hand.result ?? hand.status}
-                                      </p>
-                                      <div className="mt-2 flex flex-wrap gap-1">
-                                        {hand.cards.map((card, cardIndex) => (
-                                          <PlayingCard
-                                            card={card}
-                                            index={cardIndex}
-                                            key={`${hand.hand_id}-${card}-${cardIndex}`}
-                                          />
-                                        ))}
+                    <div className="absolute left-1/2 top-14 flex -translate-x-1/2 flex-wrap justify-center gap-2 sm:gap-3">
+                      {(activeGameState?.dealer_cards ?? []).map((card, index) => (
+                        <PlayingCard
+                          card={card}
+                          index={index}
+                          key={`dealer-${card}-${index}`}
+                          liteMotion={liteMotion}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="absolute bottom-20 left-1/2 w-[96%] -translate-x-1/2 max-[360px]:bottom-16 max-[360px]:w-[97%] sm:bottom-24">
+                      <div className="table-mobile-scroll pr-1 max-[360px]:pr-0">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {activeTable.players.map((playerId) => {
+                            const playerState = activeGameState?.player_states?.[playerId]
+                            const isTurn = activeGameState?.current_turn_user_id === playerId
+                            return (
+                              <div
+                                className={`rounded-2xl border p-3 max-[360px]:p-2 ${
+                                  isTurn
+                                    ? "border-cyan-300/55 bg-cyan-500/10"
+                                    : "border-white/20 bg-black/25"
+                                }`}
+                                key={playerId}
+                              >
+                                <p className="text-xs text-slate-100">
+                                  {shortId(playerId)}
+                                  {playerId === state.user?.id ? " (you)" : ""}
+                                </p>
+                                {!playerState ? (
+                                  <p className="mt-2 text-xs text-slate-400">Waiting for round state...</p>
+                                ) : (
+                                  <div className="mt-2 space-y-2">
+                                    {playerState.hands.map((hand, handIndex) => (
+                                      <div className="rounded-lg border border-white/15 bg-black/20 p-2" key={hand.hand_id}>
+                                        <div className="mb-2 flex items-center justify-between gap-2">
+                                        <span className="text-[11px] text-slate-300 max-[360px]:text-[10px]">
+                                            Hand {handIndex + 1} | {hand.result ?? hand.status}
+                                          </span>
+                                          <span className="rounded-full border border-cyan-200/35 bg-cyan-400/10 px-2 py-1 text-[10px] font-semibold text-cyan-100 max-[360px]:px-1.5 max-[360px]:text-[9px]">
+                                            TOTAL {hand.score}
+                                          </span>
+                                        </div>
+                                        <div className="mb-2 flex items-center justify-between gap-2">
+                                          <span className="rounded-full border border-white/20 bg-black/20 px-2 py-1 text-[10px] text-slate-200 max-[360px]:px-1.5 max-[360px]:text-[9px]">
+                                            BET {formatMoney(hand.bet)}
+                                          </span>
+                                          {hand.payout !== null ? (
+                                            <span
+                                              className={`rounded-full border px-2 py-1 text-[10px] max-[360px]:px-1.5 max-[360px]:text-[9px] ${
+                                                hand.payout >= 0
+                                                  ? "border-emerald-300/35 bg-emerald-400/10 text-emerald-200"
+                                                  : "border-rose-300/35 bg-rose-400/10 text-rose-200"
+                                              }`}
+                                            >
+                                              {hand.payout >= 0 ? "+" : "-"}{formatMoney(Math.abs(hand.payout))}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {hand.cards.map((card, cardIndex) => (
+                                            <PlayingCard
+                                              card={card}
+                                              index={cardIndex}
+                                              key={`${hand.hand_id}-${card}-${cardIndex}`}
+                                              liteMotion={liteMotion}
+                                            />
+                                          ))}
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
 
@@ -603,11 +840,11 @@ export default function MultiplayerGamePage() {
                   </div>
                 </div>
 
-                <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(event) => void onSetReady(event)}>
+                <form className="mt-4 flex w-full flex-wrap items-end gap-2 sm:w-auto sm:justify-end" onSubmit={(event) => void onSetReady(event)}>
                   <label className="text-xs text-slate-200 sm:text-sm">
                     Ready Bet
                     <input
-                      className="mt-1 w-24 rounded-lg border border-white/25 bg-white/10 px-2 py-1 text-sm text-white"
+                      className="touch-target mt-1 w-24 rounded-lg border border-white/25 bg-white/10 px-2 py-1 text-sm text-white max-[360px]:w-20 max-[360px]:text-xs"
                       min={1}
                       onChange={(event) => setReadyBet(event.target.value)}
                       step="0.5"
@@ -616,15 +853,15 @@ export default function MultiplayerGamePage() {
                     />
                   </label>
                   <button
-                    className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60"
-                    disabled={!isCurrentUserParticipant || isViewingAsSpectator}
+                    className="touch-target inline-flex items-center justify-center rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900 disabled:opacity-60 max-[360px]:px-3 max-[360px]:text-xs"
+                    disabled={!isCurrentUserParticipant || isViewingAsSpectator || !state.isRealtimeConnected || isSubmittingReady}
                     type="submit"
                   >
-                    {isCurrentUserReady ? "Set Not Ready" : "Set Ready"}
+                    {isSubmittingReady ? "Updating..." : isCurrentUserReady ? "Set Not Ready" : "Set Ready"}
                   </button>
                 </form>
 
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-6">
+                <div className="safe-sticky-bottom sticky z-30 mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/20 bg-slate-950/70 p-2 backdrop-blur max-[360px]:gap-1.5 max-[360px]:p-1.5 sm:static sm:z-auto sm:grid-cols-6 sm:border-0 sm:bg-transparent sm:p-0">
                   {[
                     ["hit", "Hit", "bg-emerald-300"],
                     ["stand", "Stand", "bg-cyan-300"],
@@ -634,11 +871,13 @@ export default function MultiplayerGamePage() {
                     ["surrender", "Surrender", "bg-rose-300"],
                   ].map(([action, label, color]) => (
                     <button
-                      className={`rounded-xl ${color} px-3 py-2 text-sm font-semibold text-slate-900 disabled:opacity-45`}
+                      className={`touch-target rounded-xl ${color} px-3 py-2 text-sm font-semibold text-slate-900 disabled:opacity-45 max-[360px]:px-2 max-[360px]:text-xs`}
                       disabled={
                         !isMyTurn ||
                         isViewingAsSpectator ||
-                        !myAvailableActions.includes(action)
+                        !myAvailableActions.includes(action) ||
+                        !state.isRealtimeConnected ||
+                        isSubmittingAction
                       }
                       key={action}
                       onClick={() => {
@@ -664,7 +903,7 @@ export default function MultiplayerGamePage() {
             )}
           </section>
 
-          <aside className="glass-card rounded-3xl p-4 sm:p-5">
+          <aside className="glass-card rounded-3xl p-4 max-[360px]:p-3 sm:p-5">
             <h2 className="font-title text-2xl text-white">Table List</h2>
             <p className="mt-1 text-xs text-slate-300 sm:text-sm">Pick a table to join or spectate.</p>
             <div className="mt-4 space-y-2">
@@ -681,7 +920,7 @@ export default function MultiplayerGamePage() {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
-                        className="rounded-md bg-gradient-to-r from-orange-300 to-rose-500 px-3 py-1 text-sm font-semibold text-slate-900"
+                        className="touch-target inline-flex items-center rounded-md bg-gradient-to-r from-orange-300 to-rose-500 px-3 py-1 text-sm font-semibold text-slate-900"
                         onClick={() => {
                           void onJoinTable(table.id)
                         }}
@@ -690,7 +929,7 @@ export default function MultiplayerGamePage() {
                         Join
                       </button>
                       <button
-                        className="rounded-md border border-white/20 bg-white/5 px-3 py-1 text-sm font-semibold text-white"
+                        className="touch-target inline-flex items-center rounded-md border border-white/20 bg-white/5 px-3 py-1 text-sm font-semibold text-white"
                         onClick={() => {
                           void onSpectateTable(table.id)
                         }}
