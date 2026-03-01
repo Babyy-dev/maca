@@ -7,6 +7,8 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
 import AuthActionButtons from "@/components/auth-action-buttons"
+import PerformanceModeControl from "@/components/performance-mode-control"
+import { useMotionProfile } from "@/hooks/use-motion-profile"
 
 const NAV_LINKS = [
   { href: "#features", label: "Features" },
@@ -95,6 +97,8 @@ function PlayingCard({
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { mode, setMode, profile } = useMotionProfile()
+  const headerProfile = profile.header
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const cardARef = useRef<HTMLDivElement | null>(null)
   const cardBRef = useRef<HTMLDivElement | null>(null)
@@ -105,61 +109,73 @@ export default function Header() {
   const tableGlowRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const shouldReduceMotion =
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-      window.matchMedia("(max-width: 900px)").matches
-    if (shouldReduceMotion) return
+    if (!headerProfile.enabled) return
 
     const ctx = gsap.context(() => {
+      gsap.ticker.lagSmoothing(700, 33)
       const cards = [cardARef.current, cardBRef.current]
+      const targets = [
+        ...cards,
+        diceRef.current,
+        chipARef.current,
+        chipBRef.current,
+        chipCRef.current,
+        tableGlowRef.current,
+      ].filter((item): item is HTMLDivElement => Boolean(item))
+      const animations: gsap.core.Animation[] = []
 
       gsap.set(cards, { transformStyle: "preserve-3d" })
-      gsap.to(diceRef.current, {
-        rotateX: 360,
-        rotateY: 420,
-        duration: 5.5,
-        repeat: -1,
-        ease: "none",
-      })
-      gsap.to(diceRef.current, {
-        y: -14,
-        duration: 1.7,
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut",
+      targets.forEach((target) => {
+        target.style.willChange = "transform, opacity"
+        target.style.backfaceVisibility = "hidden"
       })
 
-      gsap.to(chipARef.current, {
-        y: -10,
-        duration: 1.35,
+      animations.push(gsap.to(diceRef.current, {
+        rotateX: headerProfile.lite ? 180 : 360,
+        rotateY: headerProfile.lite ? 240 : 420,
+        duration: (headerProfile.lite ? 8.2 : 5.5) * headerProfile.speedScale,
+        repeat: -1,
+        ease: "none",
+      }))
+      animations.push(gsap.to(diceRef.current, {
+        y: -14,
+        duration: (headerProfile.lite ? 2.5 : 1.7) * headerProfile.speedScale,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
-      })
-      gsap.to(chipBRef.current, {
+      }))
+
+      animations.push(gsap.to(chipARef.current, {
+        y: -10,
+        duration: (headerProfile.lite ? 2 : 1.35) * headerProfile.speedScale,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
+      }))
+      animations.push(gsap.to(chipBRef.current, {
         y: -14,
-        duration: 1.65,
+        duration: (headerProfile.lite ? 2.2 : 1.65) * headerProfile.speedScale,
         delay: 0.22,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
-      })
-      gsap.to(chipCRef.current, {
+      }))
+      animations.push(gsap.to(chipCRef.current, {
         y: -9,
-        duration: 1.2,
+        duration: (headerProfile.lite ? 1.8 : 1.2) * headerProfile.speedScale,
         delay: 0.48,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
-      })
+      }))
 
-      gsap.to(tableGlowRef.current, {
+      animations.push(gsap.to(tableGlowRef.current, {
         opacity: 0.9,
-        duration: 2.4,
+        duration: (headerProfile.lite ? 3.8 : 2.4) * headerProfile.speedScale,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
-      })
+      }))
 
       const cardTimeline = gsap.timeline({ repeat: -1, repeatDelay: 0.55 })
 
@@ -169,9 +185,9 @@ export default function Header() {
           {
             rotateY: 180,
             rotateZ: -4,
-            y: -10,
-            x: 14,
-            duration: 1.05,
+            y: headerProfile.lite ? -7 : -10,
+            x: headerProfile.lite ? 10 : 14,
+            duration: (headerProfile.lite ? 1.3 : 1.05) * headerProfile.speedScale,
             ease: "power2.inOut",
           },
           0,
@@ -181,9 +197,9 @@ export default function Header() {
           {
             rotateY: -180,
             rotateZ: 3,
-            y: -6,
-            x: -12,
-            duration: 1.05,
+            y: headerProfile.lite ? -4 : -6,
+            x: headerProfile.lite ? -10 : -12,
+            duration: (headerProfile.lite ? 1.3 : 1.05) * headerProfile.speedScale,
             ease: "power2.inOut",
           },
           0.08,
@@ -195,16 +211,49 @@ export default function Header() {
             rotateZ: 0,
             y: 0,
             x: 0,
-            duration: 1.15,
+            duration: (headerProfile.lite ? 1.3 : 1.15) * headerProfile.speedScale,
             ease: "power3.inOut",
           },
           1.16,
         )
         .set(cards, { rotateY: 0 }, 2.32)
+      animations.push(cardTimeline)
+
+      let inView = true
+      const setRunning = (run: boolean): void => {
+        animations.forEach((animation) => {
+          if (run) animation.play()
+          else animation.pause()
+        })
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          inView = Boolean(entries[0]?.isIntersecting)
+          setRunning(inView && !document.hidden)
+        },
+        { threshold: 0.15 },
+      )
+
+      if (sceneRef.current) observer.observe(sceneRef.current)
+
+      const onVisibilityChange = (): void => {
+        setRunning(inView && !document.hidden)
+      }
+      document.addEventListener("visibilitychange", onVisibilityChange)
+
+      return () => {
+        observer.disconnect()
+        document.removeEventListener("visibilitychange", onVisibilityChange)
+        targets.forEach((target) => {
+          target.style.willChange = ""
+          target.style.backfaceVisibility = ""
+        })
+      }
     }, sceneRef)
 
     return () => ctx.revert()
-  }, [])
+  }, [headerProfile])
 
   return (
     <header className="relative overflow-hidden pb-20 pt-8 md:pb-24 md:pt-10">
@@ -234,6 +283,10 @@ export default function Header() {
             >
               Start Now
             </Link>
+            <PerformanceModeControl
+              mode={mode}
+              onChange={setMode}
+            />
             <AuthActionButtons
               containerClassName="flex flex-wrap gap-2"
               loginClassName="rounded-full border border-cyan-300/40 bg-cyan-500/10 px-3 py-1 font-semibold text-cyan-200"
@@ -274,6 +327,12 @@ export default function Header() {
                   containerClassName="grid grid-cols-2 gap-2"
                   loginClassName="rounded-xl border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-center font-semibold text-cyan-200"
                   logoutClassName="rounded-xl border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-center font-semibold text-rose-200"
+                />
+                <PerformanceModeControl
+                  className="inline-flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-slate-100"
+                  mode={mode}
+                  onChange={setMode}
+                  selectClassName="rounded-md border border-white/20 bg-slate-900/80 px-2 py-1 text-xs text-slate-100"
                 />
               </div>
             </div>

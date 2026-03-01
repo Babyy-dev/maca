@@ -8,6 +8,8 @@ import gsap from "gsap"
 import { memo, useEffect, useMemo, useRef, useState } from "react"
 
 import AuthActionButtons from "@/components/auth-action-buttons"
+import PerformanceModeControl from "@/components/performance-mode-control"
+import { useMotionProfile } from "@/hooks/use-motion-profile"
 import { AuthUser, getMe, getStoredToken } from "@/lib/maca-api"
 
 type Suit = "S" | "H" | "D" | "C"
@@ -358,6 +360,8 @@ export default function SinglePlayerGamePage() {
   const userBankInitializedRef = useRef(false)
   const actionLockRef = useRef(false)
   const reducedMotion = useReducedMotion()
+  const { mode, setMode, profile } = useMotionProfile()
+  const gameMotionProfile = profile.game
 
   const [user, setUser] = useState<AuthUser | null>(null)
   const [bootstrapping, setBootstrapping] = useState(true)
@@ -365,7 +369,6 @@ export default function SinglePlayerGamePage() {
   const [roundOverlay, setRoundOverlay] = useState<RoundOverlay | null>(null)
   const [showBasicStrategy, setShowBasicStrategy] = useState(true)
   const [betInput, setBetInput] = useState(String(MIN_BET))
-  const [lowPowerMode, setLowPowerMode] = useState(false)
   const [game, setGame] = useState<GameState>(() => {
     const initial = buildInitialState(INITIAL_BANK)
     gameRef.current = initial
@@ -437,54 +440,98 @@ export default function SinglePlayerGamePage() {
   }, [user])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const updatePowerMode = (): void => {
-      const smallViewport = window.matchMedia("(max-width: 900px)").matches
-      const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 4
-      setLowPowerMode(Boolean(reducedMotion || smallViewport || lowCpu))
-    }
-    updatePowerMode()
-    window.addEventListener("resize", updatePowerMode)
-    return () => window.removeEventListener("resize", updatePowerMode)
-  }, [reducedMotion])
-
-  useEffect(() => {
     if (!ambientRef.current) return
-    if (lowPowerMode) return
+    if (!gameMotionProfile.enabled) return
 
     const context = gsap.context(() => {
-      gsap.utils.toArray<HTMLElement>(".shuffle-card").forEach((element, index) => {
+      gsap.ticker.lagSmoothing(700, 33)
+
+      const cards = gsap
+        .utils
+        .toArray<HTMLElement>(".shuffle-card")
+        .slice(0, gameMotionProfile.cards)
+      const chips = gsap
+        .utils
+        .toArray<HTMLElement>(".bg-chip")
+        .slice(0, gameMotionProfile.chips)
+      const dice = gsap
+        .utils
+        .toArray<HTMLElement>(".bg-dice")
+        .slice(0, gameMotionProfile.dice)
+      const animations: gsap.core.Animation[] = []
+      const smoothMode = gameMotionProfile.cards <= 2
+
+      ;[...cards, ...chips, ...dice].forEach((element) => {
+        element.style.willChange = "transform"
+        element.style.backfaceVisibility = "hidden"
+      })
+
+      cards.forEach((element, index) => {
         gsap.set(element, { rotate: index % 2 === 0 ? -10 : 10, y: index * 8 })
-        gsap.to(element, {
-          x: index % 2 === 0 ? 170 : -170,
+        animations.push(gsap.to(element, {
+          x: index % 2 === 0 ? (smoothMode ? 110 : 170) : smoothMode ? -110 : -170,
           rotate: index % 2 === 0 ? 14 : -14,
-          y: `+=${16 + index * 2}`,
-          duration: 2.8 + index * 0.35,
+          y: `+=${smoothMode ? 8 : 16 + index * 2}`,
+          duration:
+            (smoothMode ? 3.4 + index * 0.35 : 2.8 + index * 0.35) *
+            gameMotionProfile.speedScale,
           repeat: -1,
           yoyo: true,
           ease: "sine.inOut",
-        })
+        }))
       })
 
-      gsap.to(".bg-chip", {
+      animations.push(gsap.to(chips, {
         rotation: 360,
-        duration: 8,
+        duration: (smoothMode ? 11 : 8) * gameMotionProfile.speedScale,
         repeat: -1,
         ease: "none",
         stagger: 0.3,
-      })
+      }))
 
-      gsap.to(".bg-dice", {
+      animations.push(gsap.to(dice, {
         rotateY: 360,
         rotateX: 360,
-        duration: 10,
+        duration: (smoothMode ? 13 : 10) * gameMotionProfile.speedScale,
         repeat: -1,
         ease: "none",
-      })
+      }))
+
+      let inView = true
+      const setRunning = (run: boolean): void => {
+        animations.forEach((animation) => {
+          if (run) animation.play()
+          else animation.pause()
+        })
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          inView = Boolean(entries[0]?.isIntersecting)
+          setRunning(inView && !document.hidden)
+        },
+        { threshold: 0.08 },
+      )
+
+      if (ambientRef.current) observer.observe(ambientRef.current)
+
+      const onVisibilityChange = (): void => {
+        setRunning(inView && !document.hidden)
+      }
+      document.addEventListener("visibilitychange", onVisibilityChange)
+
+      return () => {
+        observer.disconnect()
+        document.removeEventListener("visibilitychange", onVisibilityChange)
+        ;[...cards, ...chips, ...dice].forEach((element) => {
+          element.style.willChange = ""
+          element.style.backfaceVisibility = ""
+        })
+      }
     }, ambientRef)
 
     return () => context.revert()
-  }, [lowPowerMode])
+  }, [gameMotionProfile])
 
   useEffect(() => {
     if (!roundOverlay) return
@@ -1011,7 +1058,9 @@ export default function SinglePlayerGamePage() {
   const canSplitAction = Boolean(
     isPlayerTurn && activeHand && game.playerHands.length === 1 && canSplit(activeHand.cards) && game.bank >= activeHand.bet,
   )
-  const liteMotion = lowPowerMode || Boolean(reducedMotion)
+  const lowPowerMode = !gameMotionProfile.enabled
+  const liteMotion =
+    lowPowerMode || Boolean(reducedMotion) || gameMotionProfile.speedScale > 1.2
 
   const recommendedMove = useMemo<RecommendedAction | null>(() => {
     if (!showBasicStrategy || !activeHand || game.phase !== "player_turn") return null
@@ -1048,25 +1097,27 @@ export default function SinglePlayerGamePage() {
               <span className="ambient-suit">\u2660</span>
               <span className="ambient-corner br">K\u2660</span>
             </div>
-            <div className="ambient-shuffle-card shuffle-card is-red" style={{ transform: "translateX(-16px)" }}>
-              <span className="ambient-corner tl">Q\u2666</span>
-              <span className="ambient-suit">\u2666</span>
-              <span className="ambient-corner br">Q\u2666</span>
-            </div>
+            {gameMotionProfile.cards >= 3 ? (
+              <div className="ambient-shuffle-card shuffle-card is-red" style={{ transform: "translateX(-16px)" }}>
+                <span className="ambient-corner tl">Q\u2666</span>
+                <span className="ambient-suit">\u2666</span>
+                <span className="ambient-corner br">Q\u2666</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="ambient-chip-zone">
             <div className="ambient-chip ambient-chip-1 bg-chip"><span>100</span></div>
             <div className="ambient-chip ambient-chip-2 bg-chip"><span>50</span></div>
-            <div className="ambient-chip ambient-chip-3 bg-chip"><span>25</span></div>
-            <div className="ambient-chip ambient-chip-4 bg-chip"><span>10</span></div>
-            <div className="ambient-chip ambient-chip-5 bg-chip"><span>5</span></div>
-            <div className="ambient-chip ambient-chip-6 bg-chip"><span>1</span></div>
+            {gameMotionProfile.chips >= 3 ? <div className="ambient-chip ambient-chip-3 bg-chip"><span>25</span></div> : null}
+            {gameMotionProfile.chips >= 4 ? <div className="ambient-chip ambient-chip-4 bg-chip"><span>10</span></div> : null}
+            {gameMotionProfile.chips >= 5 ? <div className="ambient-chip ambient-chip-5 bg-chip"><span>5</span></div> : null}
+            {gameMotionProfile.chips >= 6 ? <div className="ambient-chip ambient-chip-6 bg-chip"><span>1</span></div> : null}
           </div>
 
           <div className="ambient-dice-zone">
             <div className="ambient-die ambient-die-a bg-dice" />
-            <div className="ambient-die ambient-die-b bg-dice" />
+            {gameMotionProfile.dice >= 2 ? <div className="ambient-die ambient-die-b bg-dice" /> : null}
           </div>
         </div>
       ) : null}
@@ -1076,6 +1127,10 @@ export default function SinglePlayerGamePage() {
           <div>
             <h1 className="font-title text-2xl text-emerald-300 max-[360px]:text-xl sm:text-4xl">MACA Blackjack Table</h1>
             <p className="text-xs text-slate-200 sm:text-sm">Live table flow: deal, hit, stand, double down, split, dealer settle.</p>
+            <p className="text-[11px] text-slate-300 sm:text-xs">
+              Animation: {mode.toUpperCase()}{" "}
+              {mode === "auto" ? `(${profile.resolvedMode.toUpperCase()})` : ""}
+            </p>
             {authError ? <p className="text-xs text-rose-300">{authError}</p> : null}
           </div>
 
@@ -1083,6 +1138,13 @@ export default function SinglePlayerGamePage() {
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/lobby">Lobby</Link>
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/game/multiplayer">Multiplayer</Link>
             <Link className="touch-target inline-flex items-center rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-xs text-white max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm" href="/profile">Profile</Link>
+            <PerformanceModeControl
+              className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-2 py-2 text-xs text-slate-100 max-[360px]:px-1.5"
+              compact
+              mode={mode}
+              onChange={setMode}
+              selectClassName="rounded-md border border-white/20 bg-slate-900/80 px-2 py-1 text-[11px] text-slate-100"
+            />
             <AuthActionButtons
               loginClassName="touch-target inline-flex items-center rounded-lg border border-cyan-300/40 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
               logoutClassName="touch-target inline-flex items-center rounded-lg border border-rose-300/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 max-[360px]:px-2 max-[360px]:text-[11px] sm:text-sm"
