@@ -95,6 +95,12 @@ export const useMultiplayerStore = defineStore("multiplayer", {
         this.connected = true
         this.message = "Connected to realtime lobby."
         socket.emit("join_lobby", {})
+        const preferredTableId = getStored(ACTIVE_TABLE_STORAGE_KEY)
+        const preferredMode = getStored(SPECTATOR_TABLE_STORAGE_KEY) ? "spectator" : "auto"
+        socket.emit("sync_state", {
+          preferred_table_id: preferredTableId,
+          preferred_mode: preferredMode,
+        })
       })
 
       socket.on("disconnect", () => {
@@ -165,13 +171,6 @@ export const useMultiplayerStore = defineStore("multiplayer", {
       })
 
       this.socket = socket
-
-      const preferredTableId = getStored(ACTIVE_TABLE_STORAGE_KEY)
-      const preferredMode = getStored(SPECTATOR_TABLE_STORAGE_KEY) ? "spectator" : "auto"
-      socket.emit("sync_state", {
-        preferred_table_id: preferredTableId,
-        preferred_mode: preferredMode,
-      })
     },
     disconnect() {
       this.socket?.disconnect()

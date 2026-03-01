@@ -158,6 +158,10 @@ export const useSinglePlayerStore = defineStore("single-player", {
     },
     async startRound(bet: number) {
       if (this.phase === "dealing" || this.phase === "player_turn" || this.phase === "dealer_turn") return
+      if (this.phase === "game_over") {
+        this.message = "Game over. Reset bankroll to continue."
+        return
+      }
       const normalized = Number.isFinite(bet) ? Math.floor(bet) : this.settings.minimumBet
       const safeBet = Math.max(this.settings.minimumBet, normalized)
       if (this.bank < safeBet) {
@@ -343,17 +347,16 @@ export const useSinglePlayerStore = defineStore("single-player", {
       if (this.phase === "game_over") {
         this.message = "Game over. Reset to continue."
       } else {
-        this.message = net >= 0 ? `Round won +${net.toFixed(2)}` : `Round lost ${net.toFixed(2)}`
+        this.message =
+          net >= 0
+            ? `Round won +${net.toFixed(2)}. Press Deal Next Round.`
+            : `Round lost ${net.toFixed(2)}. Press Deal Next Round.`
       }
 
+      const hasBlackjack = this.players.some((hand) => hand.result === "BLACKJACK")
       this.overlay = {
-        label: net > 0 ? "WIN" : net < 0 ? "LOSE" : "PUSH",
+        label: hasBlackjack ? "BLACKJACK" : net > 0 ? "WIN" : net < 0 ? "LOSE" : "PUSH",
         net,
-      }
-
-      await wait(1700)
-      if (this.phase !== "game_over") {
-        this.resetRound("Ready for next round.")
       }
     },
   },

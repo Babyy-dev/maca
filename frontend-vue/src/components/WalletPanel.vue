@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="card wallet-panel">
     <div class="row">
       <h4>Wallet</h4>
@@ -113,3 +113,4 @@ onMounted(() => {
   void wallet.refresh()
 })
 </script>
+

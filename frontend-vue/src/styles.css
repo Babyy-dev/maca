@@ -332,6 +332,193 @@ input {
   gap: 0.35rem;
 }
 
+.single-shell,
+.multi-shell {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.controls-row-vl {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+}
+
+.meta-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.meta-group p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.86rem;
+}
+
+.repo-game-panel {
+  padding: 0.9rem;
+}
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.repo-table-wrap {
+  margin-top: 0.75rem;
+}
+
+.repo-table {
+  position: relative;
+  min-height: 72vh;
+  border-radius: 1.2rem;
+  padding: clamp(0.7rem, 1.4vw, 1.2rem);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  background:
+    radial-gradient(circle at 18% 16%, rgb(16 185 129 / 0.2), transparent 38%),
+    radial-gradient(circle at 86% 20%, rgb(244 114 182 / 0.18), transparent 42%),
+    radial-gradient(circle at 50% 90%, rgb(34 211 238 / 0.14), transparent 52%),
+    linear-gradient(165deg, #073f34, #0d2f2a 42%, #0f172a 96%);
+  overflow: hidden;
+  display: grid;
+  align-content: space-between;
+  gap: 0.8rem;
+}
+
+.dealer-zone,
+.player-zone {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.zone-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zone-label {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fcd34d;
+}
+
+.zone-total {
+  margin: 0;
+  color: #bae6fd;
+  font-weight: 700;
+}
+
+.player-zone {
+  align-self: end;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.repo-hand {
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 0.9rem;
+  padding: 0.55rem;
+  background: rgb(2 6 23 / 0.5);
+  transition: transform 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+
+.repo-hand.active {
+  border-color: rgb(34 211 238 / 0.8);
+  transform: translateY(-1px) scale(1.01);
+}
+
+.repo-hand.inactive {
+  opacity: 0.55;
+}
+
+.player-card.is-me {
+  border-color: rgb(250 204 21 / 0.7);
+}
+
+.hand-row {
+  margin-bottom: 0.2rem;
+}
+
+.hand-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.hand-result {
+  margin: 0;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.hands-stack {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hand-line {
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.65rem;
+  padding: 0.35rem;
+  background: rgb(255 255 255 / 0.03);
+}
+
+.controls-row {
+  margin-top: 0.65rem;
+}
+
+.overlay-pop {
+  animation: overlay-pop-in 360ms ease;
+}
+
+.overlay .overlay-text {
+  text-align: center;
+}
+
+.overlay .amount {
+  font-weight: 900;
+}
+
+@keyframes overlay-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.multiplayer-layout {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 0.8rem;
+  align-items: start;
+}
+
 @media (max-width: 860px) {
   .links a:nth-child(2),
   .links a:nth-child(3) {
@@ -351,6 +538,18 @@ input {
   }
 
   .chat-form {
+    grid-template-columns: 1fr;
+  }
+
+  .multiplayer-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-table {
+    min-height: 78vh;
+  }
+
+  .player-zone {
     grid-template-columns: 1fr;
   }
 }

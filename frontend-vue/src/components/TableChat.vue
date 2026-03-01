@@ -1,14 +1,14 @@
-<template>
+﻿<template>
   <section class="card chat-panel">
     <div class="row">
       <h4>Table Chat</h4>
       <button class="btn" :disabled="!store.activeTableId" @click="clearDraft">Clear</button>
     </div>
-    <p class="muted" v-if="!store.activeTableId">Join a table to chat.</p>
+    <p v-if="!store.activeTableId" class="muted">Join a table to chat.</p>
 
-    <div class="chat-box">
+    <div ref="chatBox" class="chat-box">
       <article v-for="message in store.activeChatMessages" :key="message.id" class="chat-item">
-        <p class="meta">{{ message.username }} · {{ formatTime(message.created_at) }}</p>
+        <p class="meta">{{ message.username }} | {{ formatTime(message.created_at) }}</p>
         <p class="text">{{ message.message }}</p>
       </article>
     </div>
@@ -21,12 +21,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue"
+import { nextTick, ref, watch } from "vue"
 
 import { useMultiplayerStore } from "../stores/multiplayer"
 
 const store = useMultiplayerStore()
 const draft = ref("")
+const chatBox = ref<HTMLDivElement | null>(null)
+
+watch(
+  () => store.activeChatMessages.length,
+  async () => {
+    await nextTick()
+    if (chatBox.value) {
+      chatBox.value.scrollTop = chatBox.value.scrollHeight
+    }
+  },
+)
 
 async function send() {
   if (!draft.value.trim()) return
@@ -44,3 +55,4 @@ function formatTime(value: string): string {
   return date.toLocaleTimeString()
 }
 </script>
+

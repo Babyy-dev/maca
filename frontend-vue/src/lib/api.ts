@@ -17,12 +17,26 @@ export type Table = {
 
 export type TableGameState = {
   table_id: string
+  round_id?: string | null
   status: "idle" | "active" | "ended"
   phase?: string
+  players?: string[]
+  turn_index?: number | null
   current_turn_user_id: string | null
+  current_hand_index?: number | null
+  turn_seconds?: number
+  turn_deadline?: string | null
+  turn_remaining_seconds?: number
   available_actions?: string[]
+  recommended_action?: string | null
+  hand_number?: number
   dealer_cards?: string[]
   dealer_score?: number | null
+  dealer_hidden?: boolean
+  last_action?: Record<string, unknown> | null
+  action_count?: number
+  started_at?: string
+  updated_at?: string
   player_states?: Record<
     string,
     {
@@ -34,12 +48,19 @@ export type TableGameState = {
         bet: number
         status: string
         result: string | null
+        payout?: number | null
+        is_split_hand?: boolean
+        doubled_down?: boolean
       }>
       active_hand_index: number
       completed: boolean
       base_bet: number
+      bankroll_at_start?: number
       committed_bet: number
       total_payout: number
+      insurance_bet?: number
+      insurance_decided?: boolean
+      insurance_payout?: number
     }
   >
 }
